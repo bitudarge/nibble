@@ -1,5 +1,5 @@
 import { supabase } from '../supabase/client'
-import type { Review } from '../../types/database'
+import type { Circle, Profile, Review } from '../../types/database'
 
 function requireSupabase() {
   if (!supabase) throw new Error('Supabase is not configured — check your .env file.')
@@ -45,12 +45,54 @@ export async function getOwnPublicReview(userId: string, bookId: string): Promis
   return data as Review | null
 }
 
+export async function getOwnCircleReview(
+  userId: string,
+  bookId: string,
+  circleId: string,
+): Promise<Review | null> {
+  const db = requireSupabase()
+  const { data, error } = await db
+    .from('reviews')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('book_id', bookId)
+    .eq('visibility', 'circle')
+    .eq('circle_id', circleId)
+    .maybeSingle()
+  if (error) throw error
+  return data as Review | null
+}
+
+export interface CircleReviewForBook extends Review {
+  profiles: Profile
+  circles: Circle
+}
+
+/** All circle-visibility reviews of this book from circles the viewer belongs to. */
+export async function getCircleReviewsForBook(
+  bookId: string,
+  circleIds: string[],
+): Promise<CircleReviewForBook[]> {
+  if (circleIds.length === 0) return []
+  const db = requireSupabase()
+  const { data, error } = await db
+    .from('reviews')
+    .select('*, profiles(*), circles(*)')
+    .eq('book_id', bookId)
+    .eq('visibility', 'circle')
+    .in('circle_id', circleIds)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as unknown as CircleReviewForBook[]
+}
+
 export interface ReviewInput {
   bookId: string
   userId: string
   body: string
   containsSpoilers: boolean
-  visibility: 'private' | 'public'
+  visibility: 'private' | 'public' | 'circle'
+  circleId?: string
 }
 
 /**
@@ -81,6 +123,7 @@ export async function saveReview(input: ReviewInput, existingId: string | null):
       body: input.body,
       contains_spoilers: input.containsSpoilers,
       visibility: input.visibility,
+      circle_id: input.visibility === 'circle' ? input.circleId : null,
     })
     .select('*')
     .single()

@@ -59,16 +59,23 @@ Full detail for each phase (schema fields, page contents, RLS specifics, recomme
 
 ## Current status
 
-Phase 1 (scaffold + CI) done. Phases 2–4 code written and merged, but
-**not yet verified against a live backend** — two owner action items are
-blocking that:
+Phases 1–5 merged. Database schema is live, Google OAuth is fully
+configured and verified working end-to-end (redirects to a real Google
+sign-in screen both locally and on the production deploy), and the app is
+deployed at https://nibble-jade.vercel.app (auto-deploy from GitHub is
+deliberately disconnected — redeploy manually with `vercel --prod --yes`
+from the repo root).
 
-1. Run the Phase 2 SQL migrations (`supabase/README.md`).
-2. Configure Google OAuth in Supabase Auth (see Phase 3 PR description for
-   exact steps).
+Supabase project administration (schema changes, auth provider config) is
+now done directly via the Supabase Management API using a personal access
+token stored via `supabase login` on this machine, rather than asking the
+owner to click through the dashboard — see project memory
+(`minimize-owner-actions`, `nibble-ci-setup-status`) for the pattern.
 
-Phase 4 (Dashboard, Search/Discovery, Book Page, My Shelves) is written
-against the full schema with loading/empty/error states throughout, but
-untested end-to-end until the two items above are done. Don't build Phase 5
-on top of it without confirming Phase 4 actually works against real data
-first. See open PRs and `git log` for what's landed since.
+**Still not clicked through with a real user session** — nobody has
+actually signed in with a real Google account and used the app yet. Phase
+4 and 5 pages pass lint/typecheck/test/build and I've verified the schema
+and RLS behave correctly via direct API checks, but real end-to-end usage
+(search → shelve → rate → review → circles) hasn't been confirmed by an
+actual signed-in user. Phase 6 (recommender) and Phase 7 (stats/wrap) are
+not yet started.

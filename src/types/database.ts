@@ -89,3 +89,45 @@ export interface ReadingStreak {
   longest_streak: number
   last_active_date: string | null
 }
+
+export interface Circle {
+  id: string
+  name: string
+  owner_id: string
+  join_code: string
+  created_at: string
+}
+
+export interface CircleMember {
+  id: string
+  circle_id: string
+  user_id: string
+  role: CircleRole
+  joined_at: string
+}
+
+export interface CircleMessage {
+  id: string
+  circle_id: string
+  user_id: string
+  body: string
+  book_id: string | null
+  created_at: string
+}
+
+export interface CircleRead {
+  id: string
+  circle_id: string
+  book_id: string
+  started_at: string | null
+  target_finish_date: string | null
+  status: CircleReadStatus
+  created_at: string
+}
+
+export interface Profile {
+  id: string
+  display_name: string
+  avatar_url: string | null
+  created_at: string
+}
