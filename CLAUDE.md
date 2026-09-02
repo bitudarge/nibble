@@ -1,14 +1,14 @@
-# Nibble — CLAUDE.md
+# Nibbles — CLAUDE.md
 
 Follow this file on every change in this repo. If anything here is ambiguous, ask the owner before building — do not assume.
 
-## What Nibble is
+## What Nibbles is
 
-A social reading-tracker web app. Its identity is an **explainable, circle-aware book recommender** wrapped in a warm reading tracker. Mascot: a bookworm named Nibble. Phase-1 audience: the owner and ~100 friends.
+A social reading-tracker web app. Its identity is an **explainable, circle-aware book recommender** wrapped in a warm reading tracker. Mascot: a bookworm named Nibble (the app itself is called Nibbles). Phase-1 audience: the owner and ~100 friends.
 
 The owner is a **data scientist and a beginner web developer**. Write clean, heavily-commented code, and briefly explain architectural choices in plain language as you go. When a task needs an owner-only action (create an account, paste a key, click a dashboard setting), **stop, give exact numbered steps, and wait** — never fake or skip it.
 
-**Foundation and functionality come before aesthetics.** No logo/visual polish work until the owner asks; use clean, plain, functional styling.
+The app's original build (phases 1-7 below) deliberately used plain, functional styling with no visual polish. That's no longer the case: the app is now in a **refinement phase** (design + features together) driven by a visual mockup. See "Refinement phase" further down for its own build order and design system, and don't undo that work by reverting to plain styling on new pages.
 
 ## Tech stack
 
@@ -110,3 +110,48 @@ circle-aware recommendations) — all previously-broken queries now return 200. 
 **Still not fully clicked through by the owner in a browser** — the fixes
 above were verified via direct API calls, not the actual UI. That's the
 next thing that should happen.
+
+## Refinement phase (in progress)
+
+Started 2026-09-02. The full spec lives in `docs/refinement/master-prompt.md`
+(copied into the repo so it survives outside chat history), and the visual
+reference is `docs/refinement/Nibbles-design-mockup.html` — read both before
+touching any refinement-phase code rather than re-deriving from scratch.
+
+One PR per numbered section below, **stop after each for review** (this is a
+harder stop than the phase-1-7 build order: don't batch sections together
+even if previously told to build continuously).
+
+1. Design system + app shell (tokens, fonts, logo component, bottom tab bar /
+   sidebar).
+2. Dynamic type-ahead book search.
+3. Richer book data (Google Books primary, Open Library fallback) + restyled
+   Book Page.
+4. Onboarding taste quiz (cold-start for the recommender).
+5. Reworked review system: private "My Notes" vs public "Write a Review" vs
+   "share to circle", spoiler-tap, optimistic UI.
+6. Restyle the remaining pages (Dashboard, Shelves, Recommendations, Circles,
+   Profile/Wrap) to match the mockup.
+7. Cold-start recommender seeding, research-first, external dataset licenses
+   need explicit owner approval before use.
+8. Interaction/motion polish pass.
+
+Decisions already made when starting Section 1:
+
+- App name is **Nibbles** (not "Nibble") in all user-facing text; the mascot
+  is still named Nibble. The npm package name and GitHub repo stay `nibble`,
+  those are infra identifiers, not user-facing.
+- Dark mode (day/night toggle) is in scope from Section 1, not deferred.
+- Bottom tab bar / sidebar has six items: Home, Discover (= Search),
+  Shelves, Circles, Recs (= Recommendations), You (= Wrap). Recommendations
+  keeps its own tab rather than living only inside Home, unlike the mockup's
+  five-tab bar.
+- Logo is a plain text wordmark (`src/components/brand/Logo.tsx`) for now,
+  not the mockup's bookworm icon, since the owner is designing their own
+  logo separately.
+
+Content law that applies to every section: no em dashes anywhere in UI copy,
+no AI-slop phrasing, emoji only where it clearly fits and the owner approves.
+Design tokens live in `src/index.css` (`@theme` block + `--nibbles-*` CSS
+variables, light and dark) — change colors there, not by hand-picking hex
+values in components.
