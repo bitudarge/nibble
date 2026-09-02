@@ -7,8 +7,8 @@ const NAV_LINK_CLASS = ({ isActive }: { isActive: boolean }) =>
 
 /**
  * Persistent nav + user menu wrapping every signed-in page (via RequireAuth
- * -> AppShell -> <Outlet />, see App.tsx). More nav entries (Circles,
- * Recommendations, Wrap) get added here as their pages land in Phases 5–7.
+ * -> AppShell -> <Outlet />, see App.tsx). More nav entries (Recommendations,
+ * Wrap) get added here as their pages land in Phases 6–7.
  */
 export function AppShell() {
   const { user, signOut } = useAuth()
@@ -38,6 +38,9 @@ export function AppShell() {
           </NavLink>
           <NavLink to="/shelves" className={NAV_LINK_CLASS}>
             My Shelves
+          </NavLink>
+          <NavLink to="/circles" className={NAV_LINK_CLASS}>
+            Circles
           </NavLink>
         </nav>
 

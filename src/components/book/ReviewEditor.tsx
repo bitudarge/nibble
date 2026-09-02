@@ -11,14 +11,15 @@ const TAG_TYPE_LABELS: Record<string, string> = {
 }
 
 /**
- * One instance of this handles ONE review (private or public) — the Book
- * Page renders two, since a private journal entry and a public review are
- * independent rows (see reviews table comment in the schema).
+ * One instance of this handles ONE review (private, public, or one specific
+ * circle) — the Book Page renders one per visibility, since each is an
+ * independent row (see reviews table comment in the schema).
  */
 export function ReviewEditor({
   bookId,
   userId,
   visibility,
+  circleId,
   existingReview,
   existingTagIds,
   allTags,
@@ -26,7 +27,8 @@ export function ReviewEditor({
 }: {
   bookId: string
   userId: string
-  visibility: 'private' | 'public'
+  visibility: 'private' | 'public' | 'circle'
+  circleId?: string
   existingReview: Review | null
   existingTagIds: string[]
   allTags: BookTag[]
@@ -58,7 +60,7 @@ export function ReviewEditor({
     setError(null)
     try {
       const review = await saveReview(
-        { bookId, userId, body: trimmed, containsSpoilers, visibility },
+        { bookId, userId, body: trimmed, containsSpoilers, visibility, circleId },
         existingReview?.id ?? null,
       )
       await setReviewTags(review.id, selectedTagIds)
@@ -80,10 +82,22 @@ export function ReviewEditor({
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
-        placeholder={visibility === 'private' ? 'Your private thoughts…' : 'Write a public review…'}
+        placeholder={
+          visibility === 'private'
+            ? 'Your private thoughts…'
+            : visibility === 'circle'
+              ? 'Write a review for this circle…'
+              : 'Write a public review…'
+        }
         rows={4}
         className="rounded-md border border-stone-300 p-2"
-        aria-label={visibility === 'private' ? 'Private journal entry' : 'Public review'}
+        aria-label={
+          visibility === 'private'
+            ? 'Private journal entry'
+            : visibility === 'circle'
+              ? 'Circle review'
+              : 'Public review'
+        }
       />
 
       <label className="flex items-center gap-2 text-sm text-stone-700">
