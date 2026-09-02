@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
-import { countBooksFinishedInYear, getGoalForYear, getStreak } from '../lib/goals/data'
+import {
+  countBooksFinishedInYear,
+  getGoalForYear,
+  getStreak,
+  setGoalForYear,
+} from '../lib/goals/data'
 import { getRecommendations, type Recommendation } from '../lib/recommender'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemsWithBooks, type ShelfItemWithBook } from '../lib/shelf/data'
@@ -23,6 +28,8 @@ export function Home() {
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
+  const [goalInput, setGoalInput] = useState('')
+  const [savingGoal, setSavingGoal] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -89,6 +96,25 @@ export function Home() {
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not log progress.')
+    }
+  }
+
+  async function handleSetGoal() {
+    if (!user) return
+    const target = Number(goalInput)
+    if (!Number.isFinite(target) || target <= 0) {
+      setError('Enter a positive number of books.')
+      return
+    }
+    setSavingGoal(true)
+    try {
+      const updated = await setGoalForYear(user.id, CURRENT_YEAR, Math.round(target))
+      setGoal(updated)
+      setGoalInput('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save your goal.')
+    } finally {
+      setSavingGoal(false)
     }
   }
 
@@ -162,11 +188,39 @@ export function Home() {
         <div className="rounded-md border border-stone-200 p-4">
           <h2 className="mb-1 text-sm font-medium text-stone-500">{CURRENT_YEAR} reading goal</h2>
           {goal ? (
-            <p className="text-lg text-stone-900">
-              {finishedThisYear} / {goal.target_books} books
-            </p>
+            <>
+              <p className="text-lg text-stone-900">
+                {finishedThisYear} / {goal.target_books} books
+              </p>
+              <div className="mt-1 h-1.5 rounded-full bg-stone-100">
+                <div
+                  className="h-1.5 rounded-full bg-stone-900"
+                  style={{
+                    width: `${Math.min((finishedThisYear / goal.target_books) * 100, 100)}%`,
+                  }}
+                />
+              </div>
+            </>
           ) : (
-            <p className="text-sm text-stone-500">No goal set yet.</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                value={goalInput}
+                onChange={(e) => setGoalInput(e.target.value)}
+                placeholder="e.g. 20"
+                className="w-20 rounded-md border border-stone-300 px-2 py-1 text-sm"
+                aria-label="Books to read this year"
+              />
+              <button
+                type="button"
+                onClick={() => void handleSetGoal()}
+                disabled={!goalInput.trim() || savingGoal}
+                className="rounded-md bg-stone-900 px-3 py-1 text-sm text-white disabled:opacity-50"
+              >
+                {savingGoal ? 'Saving…' : 'Set goal'}
+              </button>
+            </div>
           )}
         </div>
         <div className="rounded-md border border-stone-200 p-4">
