@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client'
+import { analyzeReviewText, recomputeTasteProfile } from '../recommender'
 import type { Circle, Profile, Review } from '../../types/database'
 
 function requireSupabase() {
@@ -100,18 +101,29 @@ export interface ReviewInput {
  * (private and public are independent rows — see the schema's comment on
  * why there's no unique(user_id, book_id) — so this looks up the existing
  * row for that specific visibility rather than a blind upsert.)
+ *
+ * Also runs the review text through the recommender's transparent
+ * sentiment/keyword analysis and recomputes the user's taste profile —
+ * see src/lib/recommender/README.md for what those actually do.
  */
 export async function saveReview(input: ReviewInput, existingId: string | null): Promise<Review> {
   const db = requireSupabase()
+  const analysis = analyzeReviewText(input.body)
 
   if (existingId) {
     const { data, error } = await db
       .from('reviews')
-      .update({ body: input.body, contains_spoilers: input.containsSpoilers })
+      .update({
+        body: input.body,
+        contains_spoilers: input.containsSpoilers,
+        sentiment_score: analysis.sentimentScore,
+        extracted_themes: analysis.extractedThemes,
+      })
       .eq('id', existingId)
       .select('*')
       .single()
     if (error) throw error
+    void recomputeTasteProfile(input.userId)
     return data as Review
   }
 
@@ -124,9 +136,12 @@ export async function saveReview(input: ReviewInput, existingId: string | null):
       contains_spoilers: input.containsSpoilers,
       visibility: input.visibility,
       circle_id: input.visibility === 'circle' ? input.circleId : null,
+      sentiment_score: analysis.sentimentScore,
+      extracted_themes: analysis.extractedThemes,
     })
     .select('*')
     .single()
   if (error) throw error
+  void recomputeTasteProfile(input.userId)
   return data as Review
 }

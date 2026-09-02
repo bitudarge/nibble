@@ -1,4 +1,5 @@
 import { supabase } from '../supabase/client'
+import { recomputeTasteProfile } from '../recommender'
 import type { Rating } from '../../types/database'
 
 function requireSupabase() {
@@ -26,6 +27,7 @@ export async function setRating(userId: string, bookId: string, stars: number): 
     .select('*')
     .single()
   if (error) throw error
+  void recomputeTasteProfile(userId)
   return data as Rating
 }
 
