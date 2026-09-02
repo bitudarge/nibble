@@ -30,7 +30,6 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          show_full_output: true
           prompt: |
             Review this pull request against the rules in CLAUDE.md, especially:
             - Row Level Security / data access: could this leak data between
