@@ -59,9 +59,16 @@ Full detail for each phase (schema fields, page contents, RLS specifics, recomme
 
 ## Current status
 
-Phase 1 (scaffold + CI) done. Phase 2 (schema + RLS) SQL written in
-`supabase/migrations/`, not yet confirmed applied — owner needs to run it
-(see `supabase/README.md`). Phase 3 (Google login + app shell) code written
-and verified end-to-end against the correct error ("provider not enabled");
-needs the owner to enable Google in Supabase Auth settings before it fully
-works. See open PRs and `git log` for what's landed since.
+Phase 1 (scaffold + CI) done. Phases 2–4 code written and merged, but
+**not yet verified against a live backend** — two owner action items are
+blocking that:
+
+1. Run the Phase 2 SQL migrations (`supabase/README.md`).
+2. Configure Google OAuth in Supabase Auth (see Phase 3 PR description for
+   exact steps).
+
+Phase 4 (Dashboard, Search/Discovery, Book Page, My Shelves) is written
+against the full schema with loading/empty/error states throughout, but
+untested end-to-end until the two items above are done. Don't build Phase 5
+on top of it without confirming Phase 4 actually works against real data
+first. See open PRs and `git log` for what's landed since.
