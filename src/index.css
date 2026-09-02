@@ -1,10 +1,102 @@
 @import 'tailwindcss';
 
 /*
- * Global, plain styling only. Nibble is functional-first for now —
- * no theming/branding work until the owner asks for it.
+ * Nibbles design tokens, pulled from Nibbles-design-mockup.html.
+ *
+ * How this works: the raw hex values live as plain CSS variables below,
+ * with a light set on :root and a dark set under [data-theme="dark"].
+ * The @theme block then points Tailwind's color names (bg-page, text-ink,
+ * etc.) at those variables via `var(--nibbles-*)`, so a class like
+ * `bg-page` always resolves to whichever theme is active, light or dark,
+ * without any extra work at the call site. See src/lib/theme/useTheme.ts
+ * for how [data-theme] gets set.
  */
+@theme {
+  --font-display: 'Lora', Georgia, serif;
+  --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+
+  --color-page: var(--nibbles-page);
+  --color-surface: var(--nibbles-surface);
+  --color-ink: var(--nibbles-ink);
+  --color-muted: var(--nibbles-muted);
+  --color-line: var(--nibbles-line);
+  --color-tint: var(--nibbles-tint);
+
+  --color-sage: var(--nibbles-sage);
+  --color-sage-deep: var(--nibbles-sage-deep);
+  --color-leaf: var(--nibbles-leaf);
+  --color-on-leaf: var(--nibbles-on-leaf);
+
+  --color-honey: var(--nibbles-honey);
+  --color-honey-soft: var(--nibbles-honey-soft);
+  --color-honey-text: var(--nibbles-honey-text);
+
+  --shadow-soft: 0 2px 8px var(--nibbles-shadow);
+  --shadow-lift: 0 8px 24px var(--nibbles-shadow);
+}
+
+/* Lets `dark:` utilities key off data-theme="dark" (set by useTheme),
+   instead of Tailwind's default OS-preference-only behaviour, so the
+   in-app toggle actually drives them. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --nibbles-page: #fbf6ea;
+  --nibbles-surface: #fffcf4;
+  --nibbles-ink: #3a322a;
+  --nibbles-muted: #7a6e60;
+  --nibbles-line: #e6dcc8;
+  --nibbles-tint: #f5efe1;
+
+  --nibbles-sage: #4f7b58;
+  --nibbles-sage-deep: #3c6144;
+  --nibbles-leaf: #e4eee1;
+  --nibbles-on-leaf: #3c6144;
+
+  --nibbles-honey: #f2c14e;
+  --nibbles-honey-soft: #fbebc4;
+  --nibbles-honey-text: #8a5e1b;
+
+  --nibbles-shadow: rgba(58, 50, 42, 0.13);
+}
+
+[data-theme='dark'] {
+  --nibbles-page: #241f1b;
+  --nibbles-surface: #2e2822;
+  --nibbles-ink: #f0e6d6;
+  --nibbles-muted: #b4a794;
+  --nibbles-line: #3e362e;
+  --nibbles-tint: #332c25;
+
+  --nibbles-sage: #7fa983;
+  --nibbles-sage-deep: #5e8a64;
+  --nibbles-leaf: #31392f;
+  --nibbles-on-leaf: #bfd8bc;
+
+  --nibbles-honey: #e8b65c;
+  --nibbles-honey-soft: #3e3323;
+  --nibbles-honey-text: #e8b65c;
+
+  --nibbles-shadow: rgba(0, 0, 0, 0.4);
+}
+
 body {
   margin: 0;
+  background: var(--nibbles-page);
+  color: var(--nibbles-ink);
   color-scheme: light;
+}
+
+[data-theme='dark'] body {
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
