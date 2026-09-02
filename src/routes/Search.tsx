@@ -1,9 +1,41 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { getOrCreateBook } from '../lib/books/data'
 import { searchOpenLibrary, type OpenLibrarySearchResult } from '../lib/books/openLibrary'
 
 type LoadState = 'idle' | 'loading' | 'error' | 'loaded'
+
+// How long to wait after the user stops typing before actually searching.
+// Short enough to feel live, long enough that a fast typist doesn't fire
+// a request per keystroke.
+const DEBOUNCE_MS = 300
+
+// A few moods to search by instead of a title, matching the "cosy /
+// slow burn / quiet" chips in the design mockup.
+const MOOD_CHIPS = ['cosy', 'slow burn', 'quiet', 'fairy tale']
+
+function isAbortError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'name' in err && err.name === 'AbortError'
+}
+
+function SearchGlyph({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      className={className}
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4 4" />
+    </svg>
+  )
+}
 
 export function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -12,46 +44,32 @@ export function Search() {
 
   const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState<OpenLibrarySearchResult[]>([])
-  const [state, setState] = useState<LoadState>(initialQuery ? 'loading' : 'idle')
+  const [state, setState] = useState<LoadState>(initialQuery.trim() ? 'loading' : 'idle')
   const [error, setError] = useState<string | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
 
-  async function runSearch(q: string) {
-    const trimmed = q.trim()
-    if (!trimmed) return
+  // A timer for the debounce, and the controller for whichever request is
+  // currently in flight, so a fast-typing user's earlier keystrokes never
+  // race a later one to the results.
+  const debounceRef = useRef<number | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  function runSearch(trimmed: string) {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
 
     setState('loading')
     setError(null)
-    setSearchParams({ q: trimmed })
+    setSearchParams({ q: trimmed }, { replace: true })
 
-    try {
-      const docs = await searchOpenLibrary(trimmed)
-      setResults(docs)
-      setState('loaded')
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Open Library search failed. Check your connection and try again.',
-      )
-      setState('error')
-    }
-  }
-
-  // Run the initial search from a deep link (e.g. the nav's search box).
-  // Deliberately mount-only — re-running on every `query` keystroke would
-  // search on every character typed instead of only on submit. Calls
-  // searchOpenLibrary directly (not runSearch) since the initial `state`
-  // above already accounts for the loading case — every setState here
-  // happens inside a .then/.catch, not synchronously in the effect body.
-  useEffect(() => {
-    if (!initialQuery) return
-    searchOpenLibrary(initialQuery)
+    searchOpenLibrary(trimmed, controller.signal)
       .then((docs) => {
         setResults(docs)
         setState('loaded')
       })
       .catch((err: unknown) => {
+        if (isAbortError(err)) return
         setError(
           err instanceof Error
             ? err.message
@@ -59,8 +77,49 @@ export function Search() {
         )
         setState('error')
       })
+  }
+
+  function scheduleSearch(value: string, { immediate = false } = {}) {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+
+    const trimmed = value.trim()
+    if (!trimmed) {
+      abortRef.current?.abort()
+      setResults([])
+      setState('idle')
+      setSearchParams({}, { replace: true })
+      return
+    }
+
+    if (immediate) runSearch(trimmed)
+    else debounceRef.current = window.setTimeout(() => runSearch(trimmed), DEBOUNCE_MS)
+  }
+
+  // Run once on mount, for a deep link like /search?q=circe. Not part of
+  // scheduleSearch's dependency chain since it should only ever fire once.
+  // The search itself is kicked off from a microtask (not the effect body
+  // directly) so the resulting setState calls are treated as coming from
+  // a callback, not synchronously from the effect.
+  useEffect(() => {
+    const trimmed = initialQuery.trim()
+    if (trimmed) void Promise.resolve().then(() => runSearch(trimmed))
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+      abortRef.current?.abort()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  function handleQueryChange(e: ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value
+    setQuery(value)
+    scheduleSearch(value)
+  }
+
+  function handleChipClick(mood: string) {
+    setQuery(mood)
+    scheduleSearch(mood, { immediate: true })
+  }
 
   async function handleSelect(result: OpenLibrarySearchResult) {
     setOpeningId(result.openLibraryId)
@@ -73,81 +132,145 @@ export function Search() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-3xl">
-      <h1 className="mb-4 text-2xl font-semibold text-stone-900">Search books</h1>
+  const trimmedQuery = query.trim()
+  const showResultsArea = trimmedQuery.length > 0
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          void runSearch(query)
-        }}
-        className="mb-6 flex gap-2"
-      >
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Title or author…"
-          className="flex-1 rounded-md border border-stone-300 px-3 py-2"
-          aria-label="Search by title or author"
-        />
-        <button
-          type="submit"
-          className="rounded-md bg-stone-900 px-4 py-2 text-white disabled:opacity-50"
-          disabled={!query.trim() || state === 'loading'}
-        >
-          Search
-        </button>
+  return (
+    <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
+      <h1 className="mb-3 font-display text-2xl font-semibold text-ink">
+        What are we nibbling on?
+      </h1>
+
+      <form onSubmit={(e) => e.preventDefault()} className="mb-3.5">
+        <div className="flex items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-soft">
+          <SearchGlyph className="flex-none text-muted" />
+          <input
+            type="search"
+            value={query}
+            onChange={handleQueryChange}
+            placeholder="Title, author, or mood"
+            aria-label="Search books"
+            className="min-w-0 flex-1 border-none bg-transparent font-sans text-[15px] text-ink outline-none placeholder:text-muted"
+          />
+          <span
+            aria-hidden
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sage text-surface"
+          >
+            <SearchGlyph />
+          </span>
+        </div>
       </form>
 
-      {state === 'idle' && <p className="text-stone-500">Search for a book to get started.</p>}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {MOOD_CHIPS.map((mood) => (
+          <button
+            key={mood}
+            type="button"
+            onClick={() => handleChipClick(mood)}
+            className="rounded-full bg-tint px-3.5 py-2 font-sans text-[13px] font-bold text-ink transition-transform active:scale-95"
+          >
+            {mood}
+          </button>
+        ))}
+      </div>
 
-      {state === 'loading' && <p className="text-stone-500">Searching…</p>}
+      {!showResultsArea && (
+        <p className="font-sans text-sm text-muted">
+          Search by title, author, or try one of the moods above.
+        </p>
+      )}
+
+      {showResultsArea && (
+        <div className="mb-2.5 font-sans text-xs font-bold tracking-wide text-muted uppercase">
+          {state === 'loading' && results.length === 0
+            ? 'Searching…'
+            : `${results.length} book${results.length === 1 ? '' : 's'} for "${trimmedQuery}"${
+                state === 'loading' ? ' · updating…' : ''
+              }`}
+        </div>
+      )}
 
       {state === 'error' && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800">
-          <p className="mb-2">{error}</p>
+        <div className="mb-4 rounded-2xl border border-line bg-surface p-4 text-ink shadow-soft">
+          <p className="mb-2 font-sans text-sm">{error}</p>
           <button
             type="button"
-            onClick={() => void runSearch(query)}
-            className="text-sm font-medium underline"
+            onClick={() => runSearch(trimmedQuery)}
+            className="font-sans text-sm font-bold text-sage underline"
           >
             Try again
           </button>
         </div>
       )}
 
-      {state === 'loaded' && results.length === 0 && (
-        <p className="text-stone-500">No results for "{query}". Try a different search.</p>
-      )}
-
-      {state === 'loaded' && results.length > 0 && (
-        <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+      {showResultsArea && results.length > 0 && (
+        <ul
+          className="grid grid-cols-2 gap-3.5 transition-opacity sm:grid-cols-3 md:grid-cols-4"
+          style={{ opacity: state === 'loading' ? 0.6 : 1 }}
+        >
           {results.map((result) => (
             <li key={result.openLibraryId}>
               <button
                 type="button"
                 onClick={() => void handleSelect(result)}
                 disabled={openingId !== null}
-                className="flex w-full flex-col items-start gap-1 rounded-md border border-stone-200 p-2 text-left hover:border-stone-400 disabled:opacity-50"
+                className="flex w-full flex-col items-start gap-1 rounded-[22px] bg-surface p-2.5 text-left shadow-soft transition-transform active:scale-95 disabled:opacity-50"
               >
                 {result.coverUrl ? (
-                  <img src={result.coverUrl} alt="" className="h-40 w-full rounded object-cover" />
+                  <img
+                    src={result.coverUrl}
+                    alt=""
+                    className="h-40 w-full rounded-[14px] object-cover"
+                  />
                 ) : (
-                  <div className="flex h-40 w-full items-center justify-center rounded bg-stone-100 text-xs text-stone-400">
-                    No cover
+                  <div
+                    className="flex h-40 w-full items-center justify-center rounded-[14px] text-center font-sans text-xs text-muted"
+                    style={{
+                      background:
+                        'repeating-linear-gradient(135deg, #E9E0CC 0 7px, #F3EBD9 7px 14px)',
+                    }}
+                  >
+                    No cover yet
                   </div>
                 )}
-                <span className="text-sm font-medium text-stone-900">{result.title}</span>
-                {result.author && <span className="text-xs text-stone-500">{result.author}</span>}
+                <span className="font-display text-sm font-semibold text-ink">{result.title}</span>
+                {result.author && (
+                  <span className="font-sans text-xs text-muted">{result.author}</span>
+                )}
                 {openingId === result.openLibraryId && (
-                  <span className="text-xs text-stone-500">Opening…</span>
+                  <span className="font-sans text-xs text-muted">Opening…</span>
                 )}
               </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {state === 'loaded' && showResultsArea && results.length === 0 && (
+        <div className="mt-1.5 rounded-3xl bg-tint px-5 py-6.5 text-center">
+          <svg
+            width="52"
+            height="52"
+            viewBox="0 0 96 96"
+            aria-hidden
+            className="mx-auto"
+            style={{ animation: 'nib-wig 2.6s ease-in-out infinite', transformOrigin: '50% 80%' }}
+          >
+            <path
+              d="M30 78 C24 48 44 30 62 38"
+              fill="none"
+              stroke="var(--nibbles-sage)"
+              strokeWidth="14"
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="mt-2 font-display text-lg font-semibold text-ink">
+            Nibbles found nothing
+          </div>
+          <div className="mt-1 font-sans text-[13.5px] text-muted">
+            Try a mood instead: cosy, quiet, slow burn.
+          </div>
+        </div>
       )}
     </div>
   )
