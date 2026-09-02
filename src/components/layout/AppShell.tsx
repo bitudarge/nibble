@@ -103,7 +103,9 @@ export function AppShell() {
             <button
               type="button"
               onClick={toggleTheme}
-              aria-label={theme === 'light' ? 'Switch to nighttime reading' : 'Switch to daytime reading'}
+              aria-label={
+                theme === 'light' ? 'Switch to nighttime reading' : 'Switch to daytime reading'
+              }
               className="flex h-10 w-10 items-center justify-center rounded-full bg-tint text-muted transition-transform active:scale-90"
             >
               {theme === 'light' ? <SunIcon /> : <MoonIcon className="text-honey" />}

@@ -1,9 +1,10 @@
 # Nibbles refinement phase — master prompt
 
 This is the owner's original spec for the current refinement phase (features
-+ design, shipped together). It's copied here verbatim so it survives outside
-chat history and the Downloads folder. The paired visual reference is
-`Nibbles-design-mockup.html` in this same folder.
+
+- design, shipped together). It's copied here verbatim so it survives outside
+  chat history and the Downloads folder. The paired visual reference is
+  `Nibbles-design-mockup.html` in this same folder.
 
 Decisions made while starting Section 1 (see CLAUDE.md's "Refinement phase"
 section for the summary):
@@ -30,7 +31,7 @@ every page (dashboard, search, shelves, circles, circle detail, book page,
 recommendations, profile/"2026 wrap") and it already reflects the review model
 below (private journal, public reviews, "from your circle," spoiler-tap). Match
 its aesthetic, layout, spacing, and warmth in the real React app — reproduce the
-*feel* in our real components, keeping all existing logic, routes, and Supabase
+_feel_ in our real components, keeping all existing logic, routes, and Supabase
 wiring intact. It's a visual reference, not code to copy wholesale.
 
 > I'll swap the logo and tweak some elements myself later. Build the design system
