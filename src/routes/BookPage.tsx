@@ -1,21 +1,29 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
 import { StarRating } from '../components/book/StarRating'
 import { useAuth } from '../lib/auth/useAuth'
 import { getBookById } from '../lib/books/data'
+import { getMyCircles } from '../lib/circles/data'
 import {
   getAggregateRating,
   getUserRating,
   setRating,
   type AggregateRating,
 } from '../lib/ratings/data'
-import { getOwnPrivateReview, getOwnPublicReview, getPublicReviews } from '../lib/reviews/data'
+import {
+  getCircleReviewsForBook,
+  getOwnCircleReview,
+  getOwnPrivateReview,
+  getOwnPublicReview,
+  getPublicReviews,
+  type CircleReviewForBook,
+} from '../lib/reviews/data'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemForBook, setShelfStatus } from '../lib/shelf/data'
 import { getAllTags, getTagsForReview } from '../lib/tags/data'
-import type { Book, BookTag, Review, ShelfItem, ShelfStatus } from '../types/database'
+import type { Book, BookTag, Circle, Review, ShelfItem, ShelfStatus } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded' | 'not-found'
 
@@ -37,6 +45,12 @@ export function BookPage() {
   const [publicTagIds, setPublicTagIds] = useState<string[]>([])
   const [allTags, setAllTags] = useState<BookTag[]>([])
 
+  const [myCircles, setMyCircles] = useState<Circle[]>([])
+  const [selectedCircleId, setSelectedCircleId] = useState<string>('')
+  const [circleReviews, setCircleReviews] = useState<CircleReviewForBook[]>([])
+  const [circleReview, setCircleReview] = useState<Review | null>(null)
+  const [circleTagIds, setCircleTagIds] = useState<string[]>([])
+
   const [progressInput, setProgressInput] = useState('')
   const [progressError, setProgressError] = useState<string | null>(null)
 
@@ -54,7 +68,7 @@ export function BookPage() {
           return
         }
 
-        const [agg, shelf, rating, pubReviews, priv, pub, tags] = await Promise.all([
+        const [agg, shelf, rating, pubReviews, priv, pub, tags, circles] = await Promise.all([
           getAggregateRating(bookId),
           getShelfItemForBook(user.id, bookId),
           getUserRating(user.id, bookId),
@@ -62,6 +76,7 @@ export function BookPage() {
           getOwnPrivateReview(user.id, bookId),
           getOwnPublicReview(user.id, bookId),
           getAllTags(),
+          getMyCircles(user.id),
         ])
 
         if (cancelled) return
@@ -73,12 +88,18 @@ export function BookPage() {
         setPrivateReview(priv)
         setPublicReview(pub)
         setAllTags(tags)
+        setMyCircles(circles)
         setPrivateTagIds(
           priv ? await getTagsForReview(priv.id).then((t) => t.map((tag) => tag.id)) : [],
         )
         setPublicTagIds(
           pub ? await getTagsForReview(pub.id).then((t) => t.map((tag) => tag.id)) : [],
         )
+
+        const circleIds = circles.map((c) => c.id)
+        setCircleReviews(await getCircleReviewsForBook(bookId, circleIds))
+        if (circles.length > 0 && circles[0]) setSelectedCircleId(circles[0].id)
+
         if (!cancelled) setState('loaded')
       } catch (err) {
         if (!cancelled) {
@@ -93,6 +114,29 @@ export function BookPage() {
       cancelled = true
     }
   }, [bookId, user])
+
+  // Load the user's existing review for whichever circle is currently
+  // selected in the picker below — re-runs when they switch circles.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadCircleReview() {
+      if (!user || !bookId || !selectedCircleId) {
+        setCircleReview(null)
+        setCircleTagIds([])
+        return
+      }
+      const review = await getOwnCircleReview(user.id, bookId, selectedCircleId)
+      if (cancelled) return
+      setCircleReview(review)
+      setCircleTagIds(review ? (await getTagsForReview(review.id)).map((tag) => tag.id) : [])
+    }
+
+    void loadCircleReview()
+    return () => {
+      cancelled = true
+    }
+  }, [bookId, user, selectedCircleId])
 
   async function handleShelfChange(status: ShelfStatus) {
     if (!user || !bookId) return
@@ -276,7 +320,73 @@ export function BookPage() {
 
       <section>
         <h2 className="mb-2 text-lg font-medium text-stone-900">Your circles</h2>
-        <p className="text-stone-500">You're not in any circles yet — circles land in Phase 5.</p>
+
+        {myCircles.length === 0 ? (
+          <p className="text-stone-500">
+            You're not in any circles yet.{' '}
+            <Link to="/circles" className="underline">
+              Create or join one
+            </Link>
+            .
+          </p>
+        ) : (
+          <>
+            {circleReviews.length === 0 ? (
+              <p className="mb-3 text-stone-500">No circle reviews of this book yet.</p>
+            ) : (
+              <ul className="mb-3 flex flex-col gap-2">
+                {circleReviews.map((review) => (
+                  <li key={review.id} className="rounded-md border border-stone-200 p-3 text-sm">
+                    <span className="font-medium text-stone-900">
+                      {review.profiles.display_name}
+                    </span>
+                    <span className="ml-2 text-xs text-stone-500">in {review.circles.name}</span>
+                    <p className="mt-1 whitespace-pre-wrap text-stone-700">{review.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {user && (
+              <div>
+                <label className="mb-2 flex items-center gap-2 text-sm">
+                  Post a review to:
+                  <select
+                    value={selectedCircleId}
+                    onChange={(e) => setSelectedCircleId(e.target.value)}
+                    className="rounded-md border border-stone-300 px-2 py-1"
+                  >
+                    {myCircles.map((circle) => (
+                      <option key={circle.id} value={circle.id}>
+                        {circle.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {selectedCircleId && (
+                  <ReviewEditor
+                    key={selectedCircleId}
+                    bookId={book.id}
+                    userId={user.id}
+                    visibility="circle"
+                    circleId={selectedCircleId}
+                    existingReview={circleReview}
+                    existingTagIds={circleTagIds}
+                    allTags={allTags}
+                    onSaved={(review, tagIds) => {
+                      setCircleReview(review)
+                      setCircleTagIds(tagIds)
+                      void getCircleReviewsForBook(
+                        book.id,
+                        myCircles.map((c) => c.id),
+                      ).then(setCircleReviews)
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </>
+        )}
       </section>
     </div>
   )

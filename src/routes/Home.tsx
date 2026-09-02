@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentlyAddedBooks } from '../lib/books/data'
+import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
 import { countBooksFinishedInYear, getGoalForYear, getStreak } from '../lib/goals/data'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemsWithBooks, type ShelfItemWithBook } from '../lib/shelf/data'
@@ -21,6 +22,7 @@ export function Home() {
   const [goal, setGoal] = useState<ReadingGoal | null>(null)
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
   const [discoverBooks, setDiscoverBooks] = useState<Book[]>([])
+  const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -32,11 +34,12 @@ export function Home() {
         const shelfItems = await getShelfItemsWithBooks(user.id)
         const reading = shelfItems.filter((item) => item.status === 'reading')
 
-        const [finishedCount, yearGoal, readingStreak, discover] = await Promise.all([
+        const [finishedCount, yearGoal, readingStreak, discover, activity] = await Promise.all([
           countBooksFinishedInYear(user.id, CURRENT_YEAR),
           getGoalForYear(user.id, CURRENT_YEAR),
           getStreak(user.id),
           getRecentlyAddedBooks(shelfItems.map((item) => item.book_id)),
+          getRecentCircleActivity(user.id),
         ])
 
         if (cancelled) return
@@ -45,6 +48,7 @@ export function Home() {
         setGoal(yearGoal)
         setStreak(readingStreak)
         setDiscoverBooks(discover)
+        setCircleActivity(activity)
         setState('loaded')
       } catch (err) {
         if (!cancelled) {
@@ -207,9 +211,23 @@ export function Home() {
 
       <section>
         <h2 className="mb-2 text-lg font-medium text-stone-900">Circle activity</h2>
-        <p className="text-stone-500">
-          Join or create a circle to see friend activity here — circles land in Phase 5.
-        </p>
+        {circleActivity.length === 0 ? (
+          <p className="text-stone-500">
+            <Link to="/circles" className="underline">
+              Join or create a circle
+            </Link>{' '}
+            to see friend activity here.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {circleActivity.map((message) => (
+              <li key={message.id} className="text-sm text-stone-700">
+                <span className="font-medium text-stone-900">{message.profiles.display_name}</span>{' '}
+                in <span className="text-stone-500">{message.circle_name}</span>: {message.body}
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   )
