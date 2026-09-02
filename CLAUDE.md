@@ -72,10 +72,15 @@ token stored via `supabase login` on this machine, rather than asking the
 owner to click through the dashboard — see project memory
 (`minimize-owner-actions`, `nibble-ci-setup-status`) for the pattern.
 
+Phase 6 (recommender) merged too — explainable, circle-aware, isolated in
+`src/lib/recommender/` with 23 passing unit tests on the scoring/
+explanation/text-analysis logic specifically (fixture-based, no DB needed).
+See `src/lib/recommender/README.md` for how it actually works.
+
 **Still not clicked through with a real user session** — nobody has
-actually signed in with a real Google account and used the app yet. Phase
-4 and 5 pages pass lint/typecheck/test/build and I've verified the schema
-and RLS behave correctly via direct API checks, but real end-to-end usage
-(search → shelve → rate → review → circles) hasn't been confirmed by an
-actual signed-in user. Phase 6 (recommender) and Phase 7 (stats/wrap) are
+actually signed in with a real Google account and used the app yet. All
+pages pass lint/typecheck/test/build and I've verified the schema and RLS
+behave correctly via direct API checks, but real end-to-end usage (search
+→ shelve → rate → review → circles → recommendations) hasn't been
+confirmed by an actual signed-in user. Phase 7 (stats/goals/streaks/Wrap)
 not yet started.

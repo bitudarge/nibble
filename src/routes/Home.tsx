@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth/useAuth'
-import { getRecentlyAddedBooks } from '../lib/books/data'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
 import { countBooksFinishedInYear, getGoalForYear, getStreak } from '../lib/goals/data'
+import { getRecommendations, type Recommendation } from '../lib/recommender'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemsWithBooks, type ShelfItemWithBook } from '../lib/shelf/data'
-import type { Book, ReadingGoal, ReadingStreak } from '../types/database'
+import type { ReadingGoal, ReadingStreak } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded'
 
@@ -21,7 +21,7 @@ export function Home() {
   const [finishedThisYear, setFinishedThisYear] = useState(0)
   const [goal, setGoal] = useState<ReadingGoal | null>(null)
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
-  const [discoverBooks, setDiscoverBooks] = useState<Book[]>([])
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
 
   useEffect(() => {
@@ -34,11 +34,11 @@ export function Home() {
         const shelfItems = await getShelfItemsWithBooks(user.id)
         const reading = shelfItems.filter((item) => item.status === 'reading')
 
-        const [finishedCount, yearGoal, readingStreak, discover, activity] = await Promise.all([
+        const [finishedCount, yearGoal, readingStreak, recs, activity] = await Promise.all([
           countBooksFinishedInYear(user.id, CURRENT_YEAR),
           getGoalForYear(user.id, CURRENT_YEAR),
           getStreak(user.id),
-          getRecentlyAddedBooks(shelfItems.map((item) => item.book_id)),
+          getRecommendations(user.id, 5),
           getRecentCircleActivity(user.id),
         ])
 
@@ -47,7 +47,7 @@ export function Home() {
         setFinishedThisYear(finishedCount)
         setGoal(yearGoal)
         setStreak(readingStreak)
-        setDiscoverBooks(discover)
+        setRecommendations(recs)
         setCircleActivity(activity)
         setState('loaded')
       } catch (err) {
@@ -181,28 +181,35 @@ export function Home() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Recently added to Nibble</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Not personalized yet — real recommendations with a "why" arrive in Phase 6.
-        </p>
-        {discoverBooks.length === 0 ? (
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 className="text-lg font-medium text-stone-900">Recommended next</h2>
+          <Link to="/recommendations" className="text-xs text-stone-500 underline">
+            See all
+          </Link>
+        </div>
+        {recommendations.length === 0 ? (
           <p className="text-stone-500">Nothing to show yet.</p>
         ) : (
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {discoverBooks.map((book) => (
-              <li key={book.id}>
-                <Link to={`/book/${book.id}`}>
-                  {book.cover_url ? (
-                    <img src={book.cover_url} alt="" className="h-32 w-full rounded object-cover" />
+            {recommendations.map((rec) => (
+              <li key={rec.book.id}>
+                <Link to={`/book/${rec.book.id}`}>
+                  {rec.book.cover_url ? (
+                    <img
+                      src={rec.book.cover_url}
+                      alt=""
+                      className="h-32 w-full rounded object-cover"
+                    />
                   ) : (
                     <div className="flex h-32 w-full items-center justify-center rounded bg-stone-100 text-xs text-stone-400">
                       No cover
                     </div>
                   )}
                   <span className="mt-1 block text-xs font-medium text-stone-900">
-                    {book.title}
+                    {rec.book.title}
                   </span>
                 </Link>
+                <p className="mt-0.5 text-xs text-stone-500">{rec.why[0]}</p>
               </li>
             ))}
           </ul>
