@@ -60,6 +60,8 @@ Full detail for each phase (schema fields, page contents, RLS specifics, recomme
 ## Current status
 
 Phase 1 (scaffold + CI) done. Phase 2 (schema + RLS) SQL written in
-`supabase/migrations/` — needs the owner to run it in the Supabase SQL
-Editor (see `supabase/README.md`); not yet confirmed applied. See open PRs
-and `git log` for what's landed since.
+`supabase/migrations/`, not yet confirmed applied — owner needs to run it
+(see `supabase/README.md`). Phase 3 (Google login + app shell) code written
+and verified end-to-end against the correct error ("provider not enabled");
+needs the owner to enable Google in Supabase Auth settings before it fully
+works. See open PRs and `git log` for what's landed since.
