@@ -28,3 +28,5 @@ npm run dev
 ## Contributing
 
 All changes go through a pull request — nothing is committed directly to `main`, and nothing deploys automatically. See `CLAUDE.md` for the full workflow.
+
+<!-- CI smoke test: confirms the CI workflow runs on a PR after Phase 1 merged. -->
