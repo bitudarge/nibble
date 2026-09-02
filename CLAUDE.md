@@ -150,6 +150,24 @@ Decisions already made when starting Section 1:
   not the mockup's bookworm icon, since the owner is designing their own
   logo separately.
 
+### Getting a Google Books API key (optional, Section 3+)
+
+Book pages work with zero key, Google allows a modest number of
+unauthenticated requests. A key just makes lookups reliable at real usage.
+To create one:
+
+1. Go to https://console.cloud.google.com/ and create a project (or reuse
+   one you already have), name doesn't matter, e.g. "Nibbles".
+2. In that project, go to **APIs & Services > Library**, search "Books
+   API", and click **Enable**.
+3. Go to **APIs & Services > Credentials > Create Credentials > API key**.
+4. Optionally click into the new key and restrict it: under "API
+   restrictions" limit it to the Books API only, so it's useless for
+   anything else if it ever leaks.
+5. Copy the key into `.env` as `VITE_GOOGLE_BOOKS_API_KEY=...`, and add the
+   same variable/value in Vercel (Project Settings > Environment Variables)
+   for the production deploy. Never commit it.
+
 Content law that applies to every section: no em dashes anywhere in UI copy,
 no AI-slop phrasing, emoji only where it clearly fits and the owner approves.
 Design tokens live in `src/index.css` (`@theme` block + `--nibbles-*` CSS

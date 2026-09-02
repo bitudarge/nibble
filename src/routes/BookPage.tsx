@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { BookHero } from '../components/book/BookHero'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
-import { StarRating } from '../components/book/StarRating'
 import { useAuth } from '../lib/auth/useAuth'
-import { getBookById } from '../lib/books/data'
+import { enrichBook, getBookById } from '../lib/books/data'
 import { getMyCircles } from '../lib/circles/data'
 import {
   getAggregateRating,
@@ -81,6 +81,15 @@ export function BookPage() {
 
         if (cancelled) return
         setBook(foundBook)
+        // Books added before this feature existed (or that Google Books
+        // had nothing for last time) get their one-time enrichment lookup
+        // here, in the background, so the rest of the page never waits on
+        // it — it just fills in once it resolves.
+        if (!foundBook.metadata.enriched) {
+          void enrichBook(foundBook).then((richer) => {
+            if (!cancelled) setBook(richer)
+          })
+        }
         setAggregate(agg)
         setShelfItem(shelf)
         setMyRating(rating?.stars ?? null)
@@ -185,56 +194,59 @@ export function BookPage() {
   }
 
   if (state === 'loading') {
-    return <p className="text-stone-500">Loading…</p>
+    return <p className="font-sans text-muted">Finding that book…</p>
   }
 
   if (state === 'not-found') {
-    return <p className="text-stone-500">That book couldn't be found.</p>
+    return <p className="font-sans text-muted">That book couldn't be found.</p>
   }
 
   if (state === 'error' || !book) {
     return (
-      <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800">
+      <div className="rounded-2xl border border-line bg-surface p-4 font-sans text-ink shadow-soft">
         {error ?? 'Something went wrong loading this book.'}
       </div>
     )
   }
 
+  const description =
+    typeof book.metadata.description === 'string' ? book.metadata.description : null
+  const categories = Array.isArray(book.metadata.categories)
+    ? book.metadata.categories.filter((c): c is string => typeof c === 'string')
+    : []
+  const aggregateLabel =
+    aggregate.count > 0
+      ? `★ ${aggregate.average?.toFixed(1)} average (${aggregate.count} rating${aggregate.count === 1 ? '' : 's'})`
+      : 'No ratings yet'
+
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6 flex gap-4">
-        {book.cover_url ? (
-          <img src={book.cover_url} alt="" className="h-48 w-32 rounded object-cover" />
-        ) : (
-          <div className="flex h-48 w-32 items-center justify-center rounded bg-stone-100 text-xs text-stone-400">
-            No cover
-          </div>
-        )}
-        <div>
-          <h1 className="text-2xl font-semibold text-stone-900">{book.title}</h1>
-          {book.author && <p className="text-stone-600">{book.author}</p>}
-          {book.page_count && <p className="text-sm text-stone-500">{book.page_count} pages</p>}
-          <p className="mt-2 text-sm text-stone-600">
-            {aggregate.count > 0
-              ? `★ ${aggregate.average?.toFixed(1)} average (${aggregate.count} rating${aggregate.count === 1 ? '' : 's'})`
-              : 'No ratings yet'}
-          </p>
-        </div>
-      </div>
+      <BookHero
+        title={book.title}
+        author={book.author}
+        coverUrl={book.cover_url}
+        description={description}
+        categories={categories}
+        pageCount={book.page_count}
+        publishedYear={book.published_year}
+        aggregateLabel={aggregateLabel}
+        myRating={myRating}
+        onRatingChange={(v) => void handleRatingChange(v)}
+      />
 
       {error && (
-        <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+        <p className="mb-4 rounded-2xl border border-line bg-surface p-3 font-sans text-sm text-ink shadow-soft">
           {error}
         </p>
       )}
 
-      <section className="mb-6 flex flex-wrap items-center gap-4 rounded-md border border-stone-200 p-3">
-        <label className="flex items-center gap-2 text-sm">
-          Shelf:
+      <section className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-soft">
+        <label className="flex items-center gap-2 font-sans text-sm text-ink">
+          Shelf
           <select
             value={shelfItem?.status ?? ''}
             onChange={(e) => void handleShelfChange(e.target.value as ShelfStatus)}
-            className="rounded-md border border-stone-300 px-2 py-1"
+            className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
           >
             <option value="" disabled>
               Add to a shelf
@@ -245,8 +257,6 @@ export function BookPage() {
           </select>
         </label>
 
-        <StarRating value={myRating} onChange={(v) => void handleRatingChange(v)} />
-
         {shelfItem?.status === 'reading' && (
           <div className="flex items-center gap-2">
             <input
@@ -255,24 +265,26 @@ export function BookPage() {
               value={progressInput}
               onChange={(e) => setProgressInput(e.target.value)}
               placeholder={`Page (${shelfItem.current_page ?? 0} so far)`}
-              className="w-36 rounded-md border border-stone-300 px-2 py-1 text-sm"
+              className="w-36 rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
             />
             <button
               type="button"
               onClick={() => void handleLogProgress()}
-              className="rounded-md bg-stone-900 px-3 py-1 text-sm text-white"
+              className="rounded-full bg-sage px-4 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95"
             >
               Log progress
             </button>
           </div>
         )}
       </section>
-      {progressError && <p className="mb-4 text-sm text-red-700">{progressError}</p>}
+      {progressError && <p className="mb-4 font-sans text-sm text-honey-text">{progressError}</p>}
 
       {user && (
-        <section className="mb-6 grid gap-6 sm:grid-cols-2">
-          <div>
-            <h2 className="mb-2 text-lg font-medium text-stone-900">Your private journal</h2>
+        <section className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl bg-surface p-4 shadow-soft">
+            <h2 className="mb-2 font-display text-lg font-semibold text-ink">
+              Your private journal
+            </h2>
             <ReviewEditor
               bookId={book.id}
               userId={user.id}
@@ -286,8 +298,8 @@ export function BookPage() {
               }}
             />
           </div>
-          <div>
-            <h2 className="mb-2 text-lg font-medium text-stone-900">Your public review</h2>
+          <div className="rounded-2xl bg-surface p-4 shadow-soft">
+            <h2 className="mb-2 font-display text-lg font-semibold text-ink">Your public review</h2>
             <ReviewEditor
               bookId={book.id}
               userId={user.id}
@@ -305,10 +317,10 @@ export function BookPage() {
         </section>
       )}
 
-      <section className="mb-6">
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Public reviews</h2>
+      <section className="mb-6 rounded-2xl bg-surface p-4 shadow-soft">
+        <h2 className="mb-2 font-display text-lg font-semibold text-ink">Public reviews</h2>
         {publicReviews.length === 0 ? (
-          <p className="text-stone-500">No public reviews yet — be the first.</p>
+          <p className="font-sans text-sm text-muted">No public reviews yet. Be the first.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {publicReviews.map((review) => (
@@ -318,13 +330,13 @@ export function BookPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Your circles</h2>
+      <section className="rounded-2xl bg-surface p-4 shadow-soft">
+        <h2 className="mb-2 font-display text-lg font-semibold text-ink">Your circles</h2>
 
         {myCircles.length === 0 ? (
-          <p className="text-stone-500">
+          <p className="font-sans text-sm text-muted">
             You're not in any circles yet.{' '}
-            <Link to="/circles" className="underline">
+            <Link to="/circles" className="font-bold text-sage underline">
               Create or join one
             </Link>
             .
@@ -332,16 +344,19 @@ export function BookPage() {
         ) : (
           <>
             {circleReviews.length === 0 ? (
-              <p className="mb-3 text-stone-500">No circle reviews of this book yet.</p>
+              <p className="mb-3 font-sans text-sm text-muted">
+                No circle reviews of this book yet.
+              </p>
             ) : (
               <ul className="mb-3 flex flex-col gap-2">
                 {circleReviews.map((review) => (
-                  <li key={review.id} className="rounded-md border border-stone-200 p-3 text-sm">
-                    <span className="font-medium text-stone-900">
-                      {review.profiles.display_name}
-                    </span>
-                    <span className="ml-2 text-xs text-stone-500">in {review.circles.name}</span>
-                    <p className="mt-1 whitespace-pre-wrap text-stone-700">{review.body}</p>
+                  <li
+                    key={review.id}
+                    className="rounded-xl border border-line p-3 font-sans text-sm"
+                  >
+                    <span className="font-bold text-ink">{review.profiles.display_name}</span>
+                    <span className="ml-2 text-xs text-muted">in {review.circles.name}</span>
+                    <p className="mt-1 whitespace-pre-wrap text-ink">{review.body}</p>
                   </li>
                 ))}
               </ul>
@@ -349,12 +364,12 @@ export function BookPage() {
 
             {user && (
               <div>
-                <label className="mb-2 flex items-center gap-2 text-sm">
-                  Post a review to:
+                <label className="mb-2 flex items-center gap-2 font-sans text-sm text-ink">
+                  Post a review to
                   <select
                     value={selectedCircleId}
                     onChange={(e) => setSelectedCircleId(e.target.value)}
-                    className="rounded-md border border-stone-300 px-2 py-1"
+                    className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
                   >
                     {myCircles.map((circle) => (
                       <option key={circle.id} value={circle.id}>
