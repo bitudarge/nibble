@@ -83,10 +83,30 @@ read-only for clients now, see migration `20260902000005`), and a
 shareable yearly Wrap page (`/wrap`: books finished, pages read, favorites,
 top tags).
 
-**Still not clicked through with a real user session** — nobody has
-actually signed in with a real Google account and used the app yet. Every
-page passes lint/typecheck/test/build and the schema/RLS/streak-trigger
-behavior has been verified via direct API checks, but real end-to-end
-usage (search → shelve → rate → review → circles → recommendations →
-wrap) hasn't been confirmed by an actual signed-in user. That's the next
-thing that should happen before adding more features.
+**2026-09-02: found and fixed two real production bugs** once the owner
+actually tried the dashboard with a real account — the exact gap flagged
+above (nothing had exercised authenticated queries against live circle
+data before this). Both fixed directly on the live database via the
+Management API, migrations `20260902000006`–`20260902000008`:
+
+1. Every RLS policy that checked circle membership queried
+   `circle_members` from inside `circle_members`'s own policy — Postgres
+   detects this as infinite recursion (error 42P17) once real membership
+   rows exist. Fixed by moving the check into `SECURITY DEFINER` helper
+   functions (`is_circle_member`, `shares_circle_with`,
+   `can_view_reading_progress`) that bypass RLS internally, breaking the
+   cycle. This is the standard fix for this exact class of Postgres bug.
+2. `shelf_items`/`circle_members`/`circle_messages`/`reviews`/`ratings`
+   all had `user_id` pointing at `auth.users`, so PostgREST's
+   `profiles(*)` embedded-select syntax couldn't find a join path (it
+   needs a _direct_ FK, not one two hops away through `auth.users`).
+   Retargeted every user-identity FK to `public.profiles(id)` instead
+   (safe: one profile per user, auto-created by the signup trigger).
+
+Verified the fix with two throwaway test accounts and a real circle
+(members, messages, circle reviews, reading-together progress, showcase,
+circle-aware recommendations) — all previously-broken queries now return 200. Debug data cleaned up afterward.
+
+**Still not fully clicked through by the owner in a browser** — the fixes
+above were verified via direct API calls, not the actual UI. That's the
+next thing that should happen.
