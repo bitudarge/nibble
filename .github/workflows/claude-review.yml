@@ -1,0 +1,40 @@
+name: Claude Code Review
+
+# Automated review on every PR, using the official Claude Code GitHub Action.
+# This posts review comments only — it never merges or pushes anything.
+# Requires the ANTHROPIC_API_KEY repo secret (see PR description for setup
+# steps) and reads CLAUDE.md in this repo for project-specific rules to check.
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Review this pull request against the rules in CLAUDE.md, especially:
+            - Row Level Security / data access: could this leak data between
+              users or between circles?
+            - Secrets: any hardcoded keys, or use of the Supabase service_role
+              key or DB password outside of local .env?
+            - Missing error handling around network/DB calls, or missing
+              loading/empty/error states on data screens.
+            - Input validation gaps.
+            - General correctness bugs.
+            Only comment on things that are real issues — don't nitpick style
+            that Prettier/ESLint already enforce.
+          claude_args: '--allowedTools "Read,Grep,Glob"'
