@@ -59,4 +59,7 @@ Full detail for each phase (schema fields, page contents, RLS specifics, recomme
 
 ## Current status
 
-Phase 1 in progress. See open PRs for what's landed.
+Phase 1 (scaffold + CI) done. Phase 2 (schema + RLS) SQL written in
+`supabase/migrations/` — needs the owner to run it in the Supabase SQL
+Editor (see `supabase/README.md`); not yet confirmed applied. See open PRs
+and `git log` for what's landed since.
