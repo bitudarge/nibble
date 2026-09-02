@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+
+/*
+ * Global, plain styling only. Nibble is functional-first for now —
+ * no theming/branding work until the owner asks for it.
+ */
+body {
+  margin: 0;
+  color-scheme: light;
+}
