@@ -62,6 +62,7 @@ Full detail for each phase (schema fields, page contents, RLS specifics, recomme
 Phase 1 (scaffold + CI) done. Phases 2–4 code written and merged, but
 **not yet verified against a live backend** — two owner action items are
 blocking that:
+
 1. Run the Phase 2 SQL migrations (`supabase/README.md`).
 2. Configure Google OAuth in Supabase Auth (see Phase 3 PR description for
    exact steps).
