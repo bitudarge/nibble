@@ -1,36 +1,56 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useState, type FormEvent } from 'react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../lib/auth/useAuth'
+
+const NAV_LINK_CLASS = ({ isActive }: { isActive: boolean }) =>
+  `text-sm ${isActive ? 'font-semibold text-stone-900' : 'text-stone-600 hover:text-stone-900'}`
 
 /**
  * Persistent nav + user menu wrapping every signed-in page (via RequireAuth
- * -> AppShell -> <Outlet />, see App.tsx). Only "Home" exists as a real page
- * so far — Search, Shelves, Circles, Recommendations, and Wrap get nav
- * entries here as their pages land in Phases 4–7.
+ * -> AppShell -> <Outlet />, see App.tsx). More nav entries (Circles,
+ * Recommendations, Wrap) get added here as their pages land in Phases 5–7.
  */
 export function AppShell() {
   const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [searchInput, setSearchInput] = useState('')
 
   const rawName = user?.user_metadata?.full_name
   const displayName = typeof rawName === 'string' && rawName ? rawName : (user?.email ?? 'Reader')
   const rawAvatar = user?.user_metadata?.avatar_url
   const avatarUrl = typeof rawAvatar === 'string' ? rawAvatar : undefined
 
+  function handleSearchSubmit(e: FormEvent) {
+    e.preventDefault()
+    const trimmed = searchInput.trim()
+    if (trimmed) navigate(`/search?q=${encodeURIComponent(trimmed)}`)
+  }
+
   return (
     <div className="min-h-screen bg-stone-50">
-      <header className="flex items-center justify-between gap-4 border-b border-stone-200 bg-white px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-200 bg-white px-4 py-3">
         <nav className="flex items-center gap-4">
           <NavLink to="/" className="text-lg font-semibold text-stone-900">
             🐛 Nibble
           </NavLink>
+          <NavLink to="/" end className={NAV_LINK_CLASS}>
+            Home
+          </NavLink>
+          <NavLink to="/shelves" className={NAV_LINK_CLASS}>
+            My Shelves
+          </NavLink>
         </nav>
 
-        <input
-          type="search"
-          placeholder="Search books (coming soon)"
-          disabled
-          aria-label="Search books"
-          className="hidden w-64 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-500 disabled:bg-stone-100 sm:block"
-        />
+        <form onSubmit={handleSearchSubmit} className="hidden sm:block">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search books…"
+            aria-label="Search books"
+            className="w-64 rounded-md border border-stone-300 px-3 py-1.5 text-sm"
+          />
+        </form>
 
         <div className="flex items-center gap-3">
           {avatarUrl ? (
