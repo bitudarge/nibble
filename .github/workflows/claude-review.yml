@@ -2,8 +2,13 @@ name: Claude Code Review
 
 # Automated review on every PR, using the official Claude Code GitHub Action.
 # This posts review comments only — it never merges or pushes anything.
-# Requires the ANTHROPIC_API_KEY repo secret (see PR description for setup
-# steps) and reads CLAUDE.md in this repo for project-specific rules to check.
+#
+# Auth: rather than installing the separate "Claude" GitHub App, this uses
+# the GITHUB_TOKEN that Actions automatically issues for every run (scoped
+# only to this repo, expires when the job ends) via the action's github_token
+# input. Requires the ANTHROPIC_API_KEY repo secret (see PR description) so
+# Claude itself can be called, and reads CLAUDE.md in this repo for
+# project-specific rules to check.
 on:
   pull_request:
     types: [opened, synchronize]
@@ -15,7 +20,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,6 +29,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             Review this pull request against the rules in CLAUDE.md, especially:
             - Row Level Security / data access: could this leak data between
