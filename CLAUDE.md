@@ -59,7 +59,7 @@ Full detail for each phase (schema fields, page contents, RLS specifics, recomme
 
 ## Current status
 
-Phases 1–5 merged. Database schema is live, Google OAuth is fully
+**All 7 phases merged.** Database schema is live, Google OAuth is fully
 configured and verified working end-to-end (redirects to a real Google
 sign-in screen both locally and on the production deploy), and the app is
 deployed at https://nibble-jade.vercel.app (auto-deploy from GitHub is
@@ -67,20 +67,26 @@ deliberately disconnected — redeploy manually with `vercel --prod --yes`
 from the repo root).
 
 Supabase project administration (schema changes, auth provider config) is
-now done directly via the Supabase Management API using a personal access
+done directly via the Supabase Management API using a personal access
 token stored via `supabase login` on this machine, rather than asking the
 owner to click through the dashboard — see project memory
 (`minimize-owner-actions`, `nibble-ci-setup-status`) for the pattern.
 
-Phase 6 (recommender) merged too — explainable, circle-aware, isolated in
+Phase 6 (recommender) — explainable, circle-aware, isolated in
 `src/lib/recommender/` with 23 passing unit tests on the scoring/
 explanation/text-analysis logic specifically (fixture-based, no DB needed).
 See `src/lib/recommender/README.md` for how it actually works.
 
+Phase 7 — reading goals (settable on the Dashboard now), streaks (computed
+server-side by a DB trigger on `reading_sessions` insert — the table is
+read-only for clients now, see migration `20260902000005`), and a
+shareable yearly Wrap page (`/wrap`: books finished, pages read, favorites,
+top tags).
+
 **Still not clicked through with a real user session** — nobody has
-actually signed in with a real Google account and used the app yet. All
-pages pass lint/typecheck/test/build and I've verified the schema and RLS
-behave correctly via direct API checks, but real end-to-end usage (search
-→ shelve → rate → review → circles → recommendations) hasn't been
-confirmed by an actual signed-in user. Phase 7 (stats/goals/streaks/Wrap)
-not yet started.
+actually signed in with a real Google account and used the app yet. Every
+page passes lint/typecheck/test/build and the schema/RLS/streak-trigger
+behavior has been verified via direct API checks, but real end-to-end
+usage (search → shelve → rate → review → circles → recommendations →
+wrap) hasn't been confirmed by an actual signed-in user. That's the next
+thing that should happen before adding more features.
