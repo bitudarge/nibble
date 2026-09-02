@@ -14,16 +14,16 @@ npm run dev
 
 ## Scripts
 
-| Command                | What it does                              |
-| ----------------------- | ------------------------------------------ |
-| `npm run dev`           | Start the dev server                       |
-| `npm run build`         | Type-check and build for production        |
-| `npm run test`          | Run the test suite once                    |
-| `npm run test:watch`    | Run tests in watch mode                    |
-| `npm run lint`          | Lint with ESLint                           |
-| `npm run format`        | Format with Prettier                       |
-| `npm run format:check`  | Check formatting without writing           |
-| `npm run typecheck`     | Type-check without emitting                |
+| Command                | What it does                        |
+| ---------------------- | ----------------------------------- |
+| `npm run dev`          | Start the dev server                |
+| `npm run build`        | Type-check and build for production |
+| `npm run test`         | Run the test suite once             |
+| `npm run test:watch`   | Run tests in watch mode             |
+| `npm run lint`         | Lint with ESLint                    |
+| `npm run format`       | Format with Prettier                |
+| `npm run format:check` | Check formatting without writing    |
+| `npm run typecheck`    | Type-check without emitting         |
 
 ## Contributing
 
