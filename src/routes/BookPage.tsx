@@ -4,9 +4,11 @@ import { BookHero } from '../components/book/BookHero'
 import { QuickNoteNudge } from '../components/book/QuickNoteNudge'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
+import { useCelebration } from '../components/celebrate/useCelebration'
 import { useAuth } from '../lib/auth/useAuth'
 import { enrichBook, getBookById } from '../lib/books/data'
 import { getMyCircles } from '../lib/circles/data'
+import { getStreak, isStreakMilestone } from '../lib/goals/data'
 import {
   getAggregateRating,
   getUserRating,
@@ -33,6 +35,7 @@ type LoadState = 'loading' | 'error' | 'loaded' | 'not-found'
 export function BookPage() {
   const { bookId } = useParams<{ bookId: string }>()
   const { user } = useAuth()
+  const { celebrate, node: celebrationNode } = useCelebration()
 
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -159,9 +162,13 @@ export function BookPage() {
 
   async function handleShelfChange(status: ShelfStatus) {
     if (!user || !bookId) return
+    const wasFinished = shelfItem?.status === 'finished'
     try {
       const updated = await setShelfStatus(user.id, bookId, status)
       setShelfItem(updated)
+      if (status === 'finished' && !wasFinished) {
+        celebrate(`Finished ${book?.title ?? 'that one'}! Nibbles is proud.`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update your shelf.')
     }
@@ -232,6 +239,9 @@ export function BookPage() {
     }
     setProgressError(null)
     try {
+      // Read the streak before logging so a milestone can be detected by
+      // comparing before/after, rather than guessing at what changed.
+      const streakBefore = await getStreak(user.id)
       await logReadingProgress(
         user.id,
         bookId,
@@ -239,9 +249,17 @@ export function BookPage() {
         toPage,
         book?.page_count ?? null,
       )
-      const updatedShelf = await getShelfItemForBook(user.id, bookId)
+      const [updatedShelf, streakAfter] = await Promise.all([
+        getShelfItemForBook(user.id, bookId),
+        getStreak(user.id),
+      ])
       setShelfItem(updatedShelf)
       setProgressInput('')
+      const before = streakBefore?.current_streak ?? 0
+      const after = streakAfter?.current_streak ?? 0
+      if (isStreakMilestone(before, after)) {
+        celebrate(`${after} days in a row. Keep it warm.`)
+      }
     } catch (err) {
       setProgressError(err instanceof Error ? err.message : 'Could not log your progress.')
     }
@@ -274,7 +292,8 @@ export function BookPage() {
       : 'No ratings yet'
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
+      {celebrationNode}
       <BookHero
         title={book.title}
         author={book.author}

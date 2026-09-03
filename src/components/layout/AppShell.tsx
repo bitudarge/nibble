@@ -86,7 +86,7 @@ export function AppShell() {
             <button
               type="button"
               onClick={() => void handleSignOut()}
-              className="text-xs font-semibold text-muted hover:text-ink"
+              className="text-xs font-semibold text-muted transition-colors hover:text-ink active:text-ink"
             >
               Sign out
             </button>
@@ -106,7 +106,7 @@ export function AppShell() {
               aria-label={
                 theme === 'light' ? 'Switch to nighttime reading' : 'Switch to daytime reading'
               }
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-tint text-muted transition-transform active:scale-90"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-tint text-muted transition-transform active:scale-90"
             >
               {theme === 'light' ? <SunIcon /> : <MoonIcon className="text-honey" />}
             </button>

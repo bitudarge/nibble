@@ -114,6 +114,44 @@ body {
   }
 }
 
+/* One leaf/petal drifting down and rotating away, for the finish/streak
+   celebration (Celebration.tsx). Each particle staggers its own start via
+   animation-delay, so the fall reads as a soft flutter rather than one
+   uniform sheet. */
+@keyframes nib-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) rotate(0deg);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(220px) rotate(320deg);
+  }
+}
+
+/* The celebration's toast-style message: rises in, holds, fades out. */
+@keyframes nib-toast {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  12% {
+    opacity: 1;
+    transform: none;
+  }
+  88% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
