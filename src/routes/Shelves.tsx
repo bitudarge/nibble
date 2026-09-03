@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { BookCover } from '../components/book/BookCover'
 import { useAuth } from '../lib/auth/useAuth'
 import { getShelfItemsWithBooks, setShelfStatus, type ShelfItemWithBook } from '../lib/shelf/data'
 import type { ShelfStatus } from '../types/database'
@@ -12,11 +13,24 @@ const SHELVES: { status: ShelfStatus; label: string }[] = [
   { status: 'finished', label: 'Finished' },
 ]
 
+const NEXT_STATUS: Record<ShelfStatus, ShelfStatus> = {
+  want_to_read: 'reading',
+  reading: 'finished',
+  finished: 'want_to_read',
+}
+
+const MOVE_LABEL: Record<ShelfStatus, string> = {
+  want_to_read: 'Start reading',
+  reading: 'Mark finished',
+  finished: 'Back to want to read',
+}
+
 export function Shelves() {
   const { user } = useAuth()
   const [items, setItems] = useState<ShelfItemWithBook[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [activeShelf, setActiveShelf] = useState<ShelfStatus>('reading')
 
   useEffect(() => {
     let cancelled = false
@@ -57,81 +71,111 @@ export function Shelves() {
   }
 
   if (state === 'loading') {
-    return <p className="text-stone-500">Loading your shelves…</p>
+    return <p className="font-sans text-muted">Loading your shelves.</p>
   }
 
   if (state === 'error') {
     return (
-      <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800">
+      <div className="rounded-2xl border border-line bg-surface p-4 font-sans text-ink shadow-soft">
         {error ?? 'Something went wrong.'}
       </div>
     )
   }
 
-  return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="mb-6 text-2xl font-semibold text-stone-900">My shelves</h1>
+  const shelfItems = items.filter((item) => item.status === activeShelf)
 
-      {items.length === 0 && (
-        <p className="mb-6 text-stone-500">
-          Nothing on your shelves yet.{' '}
-          <Link to="/search" className="underline">
-            Search for a book
-          </Link>{' '}
-          to add one.
+  return (
+    <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
+      <h1 className="mb-4 font-display text-2xl font-semibold text-ink">Your shelves</h1>
+
+      {error && (
+        <p className="mb-4 rounded-2xl border border-line bg-surface p-3 font-sans text-sm text-ink shadow-soft">
+          {error}
         </p>
       )}
 
-      <div className="grid gap-8 md:grid-cols-3">
+      <div className="mb-5 flex gap-1.5 rounded-full bg-tint p-1.5">
         {SHELVES.map(({ status, label }) => {
-          const shelfItems = items.filter((item) => item.status === status)
+          const active = status === activeShelf
+          const count = items.filter((item) => item.status === status).length
           return (
-            <div key={status}>
-              <h2 className="mb-3 font-medium text-stone-900">
-                {label} ({shelfItems.length})
-              </h2>
-              {shelfItems.length === 0 ? (
-                <p className="text-sm text-stone-400">Nothing here yet.</p>
-              ) : (
-                <ul className="grid grid-cols-2 gap-3">
-                  {shelfItems.map((item) => (
-                    <li key={item.id} className="flex flex-col gap-1">
-                      <Link to={`/book/${item.book_id}`}>
-                        {item.books.cover_url ? (
-                          <img
-                            src={item.books.cover_url}
-                            alt=""
-                            className="h-32 w-full rounded object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-32 w-full items-center justify-center rounded bg-stone-100 text-xs text-stone-400">
-                            No cover
-                          </div>
-                        )}
-                        <span className="mt-1 block text-xs font-medium text-stone-900">
-                          {item.books.title}
-                        </span>
-                      </Link>
-                      <select
-                        value={item.status}
-                        onChange={(e) => void moveTo(item, e.target.value as ShelfStatus)}
-                        className="rounded border border-stone-300 px-1 py-0.5 text-xs"
-                        aria-label={`Move "${item.books.title}" to a different shelf`}
-                      >
-                        {SHELVES.map((s) => (
-                          <option key={s.status} value={s.status}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <button
+              key={status}
+              type="button"
+              onClick={() => setActiveShelf(status)}
+              className={`h-10 flex-1 rounded-full font-sans text-[12.5px] font-extrabold transition-colors ${
+                active ? 'bg-sage text-surface shadow-soft' : 'text-muted'
+              }`}
+            >
+              {label} ({count})
+            </button>
           )
         })}
       </div>
+
+      {shelfItems.length === 0 ? (
+        <div className="rounded-3xl bg-tint px-5 py-8 text-center">
+          <svg
+            width="60"
+            height="60"
+            viewBox="0 0 96 96"
+            aria-hidden
+            className="mx-auto"
+            style={{ animation: 'nib-wig 2.6s ease-in-out infinite', transformOrigin: '50% 80%' }}
+          >
+            <path
+              d="M30 78 C24 48 44 30 62 38"
+              fill="none"
+              stroke="var(--nibbles-sage)"
+              strokeWidth="14"
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="mt-2 font-display text-lg font-semibold text-ink">
+            Nothing on this shelf yet
+          </div>
+          <div className="mt-1 font-sans text-[13.5px] text-muted">
+            Nibbles is hungry. Find something to nibble on.
+          </div>
+          <Link
+            to="/search"
+            className="mt-4 inline-block rounded-full bg-sage px-5 py-2.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95"
+          >
+            Discover books
+          </Link>
+        </div>
+      ) : (
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3">
+          {shelfItems.map((item) => (
+            <li key={item.id}>
+              <Link to={`/book/${item.book_id}`}>
+                <BookCover
+                  coverUrl={item.books.cover_url}
+                  title={item.books.title}
+                  className="h-[172px] w-full"
+                />
+              </Link>
+              <div className="mb-1.5 h-[7px] rounded-b-md bg-line shadow-soft" />
+              <Link
+                to={`/book/${item.book_id}`}
+                className="block truncate font-display text-sm font-semibold text-ink"
+              >
+                {item.books.title}
+              </Link>
+              <p className="mb-2 truncate font-sans text-[11.5px] text-muted">
+                {item.books.author}
+              </p>
+              <button
+                type="button"
+                onClick={() => void moveTo(item, NEXT_STATUS[item.status])}
+                className="w-full rounded-full border-2 border-line bg-surface py-2 font-sans text-xs font-extrabold text-ink transition-transform active:scale-95"
+              >
+                {MOVE_LABEL[item.status]}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
