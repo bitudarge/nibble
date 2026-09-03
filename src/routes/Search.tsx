@@ -196,7 +196,7 @@ export function Search() {
           <button
             type="button"
             onClick={() => runSearch(trimmedQuery)}
-            className="font-sans text-sm font-bold text-sage underline"
+            className="font-sans text-sm font-bold text-sage underline transition-opacity active:opacity-60"
           >
             Try again
           </button>

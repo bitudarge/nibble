@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
+import { useCelebration } from '../components/celebrate/useCelebration'
 import { useAuth } from '../lib/auth/useAuth'
 import { getShelfItemsWithBooks, setShelfStatus, type ShelfItemWithBook } from '../lib/shelf/data'
 import type { ShelfStatus } from '../types/database'
@@ -27,6 +28,7 @@ const MOVE_LABEL: Record<ShelfStatus, string> = {
 
 export function Shelves() {
   const { user } = useAuth()
+  const { celebrate, node: celebrationNode } = useCelebration()
   const [items, setItems] = useState<ShelfItemWithBook[]>([])
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -65,6 +67,9 @@ export function Shelves() {
       setItems((prev) =>
         prev.map((it) => (it.id === item.id ? { ...it, ...updated, books: it.books } : it)),
       )
+      if (status === 'finished' && item.status !== 'finished') {
+        celebrate(`Finished ${item.books.title}! Nibbles is proud.`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not move that book.')
     }
@@ -86,6 +91,7 @@ export function Shelves() {
 
   return (
     <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
+      {celebrationNode}
       <h1 className="mb-4 font-display text-2xl font-semibold text-ink">Your shelves</h1>
 
       {error && (
@@ -103,7 +109,7 @@ export function Shelves() {
               key={status}
               type="button"
               onClick={() => setActiveShelf(status)}
-              className={`h-10 flex-1 rounded-full font-sans text-[12.5px] font-extrabold transition-colors ${
+              className={`h-10 flex-1 rounded-full font-sans text-[12.5px] font-extrabold transition-all active:scale-95 ${
                 active ? 'bg-sage text-surface shadow-soft' : 'text-muted'
               }`}
             >
