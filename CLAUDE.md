@@ -111,30 +111,65 @@ circle-aware recommendations) — all previously-broken queries now return 200. 
 above were verified via direct API calls, not the actual UI. That's the
 next thing that should happen.
 
-## Refinement phase (in progress)
+## Refinement phase (all 8 sections merged, 2026-09-02 to 2026-09-03)
 
-Started 2026-09-02. The full spec lives in `docs/refinement/master-prompt.md`
-(copied into the repo so it survives outside chat history), and the visual
-reference is `docs/refinement/Nibbles-design-mockup.html` — read both before
-touching any refinement-phase code rather than re-deriving from scratch.
+The full spec lives in `docs/refinement/master-prompt.md` (copied into the
+repo so it survives outside chat history), and the visual reference is
+`docs/refinement/Nibbles-design-mockup.html` — read both before touching
+refinement-phase code rather than re-deriving from scratch.
 
-One PR per numbered section below, **stop after each for review** (this is a
-harder stop than the phase-1-7 build order: don't batch sections together
-even if previously told to build continuously).
+One PR per numbered section, merged and deployed in order:
 
 1. Design system + app shell (tokens, fonts, logo component, bottom tab bar /
-   sidebar).
-2. Dynamic type-ahead book search.
+   sidebar). PR #12.
+2. Dynamic type-ahead book search, debounced, cancels stale requests. PR #13.
 3. Richer book data (Google Books primary, Open Library fallback) + restyled
-   Book Page.
-4. Onboarding taste quiz (cold-start for the recommender).
+   Book Page. PR #14. Fixed a real bug found only by testing against live
+   RLS: `books` had no UPDATE policy, so enrichment writes were silently
+   dropped, added `books_update_authenticated` (migration
+   `20260902000009`).
+4. Onboarding taste quiz (cold-start for the recommender), seeds
+   `taste_profiles`. PR #15.
 5. Reworked review system: private "My Notes" vs public "Write a Review" vs
-   "share to circle", spoiler-tap, optimistic UI.
-6. Restyle the remaining pages (Dashboard, Shelves, Recommendations, Circles,
-   Profile/Wrap) to match the mockup.
-7. Cold-start recommender seeding, research-first, external dataset licenses
-   need explicit owner approval before use.
-8. Interaction/motion polish pass.
+   "share to circle", tappable half-star rating, the anti-forgetting quick
+   note, spoiler-tap, optimistic UI with rollback. PR #16.
+6. Restyled the remaining pages (Dashboard, Shelves, Recommendations,
+   Circles, circle detail, Profile/Wrap) to match the mockup. PRs #17
+   (Circles/circle detail/Wrap) and #18 (Dashboard/Shelves/Recommendations).
+7. Made the recommender's book-side scoring actually use Google Books
+   categories, not just `review_tags`, so quiz-seeded genre affinity has
+   something to match against on the many books nobody's reviewed yet. PR
+   #19. The optional external-ratings-dataset bonus was proposed and the
+   owner chose to skip it for now (not integrated, no license was ever
+   evaluated against real code).
+8. Interaction/motion polish pass: a honey/sage "finished a book" and
+   "streak milestone" celebration (new, nothing like it existed before),
+   plus a tap-target/press-feedback/page-transition consistency sweep. PR
+   #20.
+
+Live at https://nibbles-app.vercel.app (new primary domain, registered as a
+proper Vercel project domain, not just an alias, so it survives every
+deploy) and https://nibble-jade.vercel.app (original domain, kept working).
+Redeploy after merging with `npx vercel --prod --yes` from the repo root,
+same manual-deploy discipline as before, auto-deploy from GitHub is still
+deliberately disconnected. That command has intermittently failed once with
+`"Not authorized"` on the first attempt and succeeded immediately on retry,
+twice so far, cause unconfirmed (looked transient, not investigated
+further since a retry always worked).
+
+**Not yet clicked through by the owner with a real signed-in account.**
+Every PR in this phase hit the same wall: `RequireAuth` needs a real Google
+OAuth session, which isn't obtainable in an unattended environment, so
+every section's testing was lint/typecheck/test/build plus targeted unit
+tests, never a real browser session logged in as a real user. The one
+exception was Section 3's RLS bug, which was caught by directly exercising
+the database as an authenticated role, not through the UI. Given Phase 7's
+history (`nibble-ci-setup-status` in memory: two real bugs surfaced only
+once the owner actually used the dashboard signed in), treat this whole
+phase as unverified-in-the-browser until that happens, especially: the
+taste quiz's one-time post-signup redirect, the review system's "share to
+circle" flow, and the new finish/streak celebration's actual trigger
+timing.
 
 Decisions already made when starting Section 1:
 
