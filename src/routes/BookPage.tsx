@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { BookHero } from '../components/book/BookHero'
+import { QuickNoteNudge } from '../components/book/QuickNoteNudge'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
 import { useAuth } from '../lib/auth/useAuth'
@@ -18,6 +19,8 @@ import {
   getOwnPrivateReview,
   getOwnPublicReview,
   getPublicReviews,
+  saveReview,
+  shareReviewToCircle,
   type CircleReviewForBook,
 } from '../lib/reviews/data'
 import { logReadingProgress } from '../lib/sessions/data'
@@ -53,6 +56,13 @@ export function BookPage() {
 
   const [progressInput, setProgressInput] = useState('')
   const [progressError, setProgressError] = useState<string | null>(null)
+
+  // The anti-forgetting nudge: shown right after a rating, only while the
+  // user has no private note yet for this book (once they save one, or
+  // already had one, there's nothing to nudge for).
+  const [showQuickNote, setShowQuickNote] = useState(false)
+  const [quickNoteSaving, setQuickNoteSaving] = useState(false)
+  const [quickNoteError, setQuickNoteError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -157,16 +167,60 @@ export function BookPage() {
     }
   }
 
+  // Optimistic: the stars update the instant you tap them, before the
+  // network round-trip resolves. If the save fails, roll the display back
+  // to what it was and say so, rather than leaving a rating shown that
+  // never actually saved.
   async function handleRatingChange(stars: number) {
     if (!user || !bookId) return
+    const previous = myRating
+    setMyRating(stars)
+    if (!privateReview) setShowQuickNote(true)
     try {
       const updated = await setRating(user.id, bookId, stars)
       setMyRating(updated.stars)
       const agg = await getAggregateRating(bookId)
       setAggregate(agg)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your rating.')
+      setMyRating(previous)
+      setShowQuickNote(false)
+      setError(err instanceof Error ? err.message : 'Could not save your rating. Try again.')
     }
+  }
+
+  async function handleQuickNoteSave(text: string) {
+    if (!user || !bookId) return
+    setQuickNoteSaving(true)
+    setQuickNoteError(null)
+    try {
+      const review = await saveReview(
+        { bookId, userId: user.id, body: text, containsSpoilers: false, visibility: 'private' },
+        null,
+      )
+      setPrivateReview(review)
+      setShowQuickNote(false)
+    } catch (err) {
+      setQuickNoteError(err instanceof Error ? err.message : 'Could not save that note. Try again.')
+    } finally {
+      setQuickNoteSaving(false)
+    }
+  }
+
+  function handleQuickNoteSkip() {
+    setShowQuickNote(false)
+  }
+
+  async function handleShareToCircle(circleId: string, body: string) {
+    if (!user || !bookId) return
+    const shared = await shareReviewToCircle(user.id, bookId, circleId, body)
+    if (shared.circle_id === selectedCircleId) {
+      setCircleReview(shared)
+    }
+    const refreshed = await getCircleReviewsForBook(
+      bookId,
+      myCircles.map((c) => c.id),
+    )
+    setCircleReviews(refreshed)
   }
 
   async function handleLogProgress() {
@@ -234,6 +288,15 @@ export function BookPage() {
         onRatingChange={(v) => void handleRatingChange(v)}
       />
 
+      {showQuickNote && (
+        <QuickNoteNudge
+          onSave={(text) => void handleQuickNoteSave(text)}
+          onSkip={handleQuickNoteSkip}
+          saving={quickNoteSaving}
+          error={quickNoteError}
+        />
+      )}
+
       {error && (
         <p className="mb-4 rounded-2xl border border-line bg-surface p-3 font-sans text-sm text-ink shadow-soft">
           {error}
@@ -280,58 +343,67 @@ export function BookPage() {
       {progressError && <p className="mb-4 font-sans text-sm text-honey-text">{progressError}</p>}
 
       {user && (
-        <section className="mb-6 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl bg-surface p-4 shadow-soft">
-            <h2 className="mb-2 font-display text-lg font-semibold text-ink">
-              Your private journal
-            </h2>
-            <ReviewEditor
-              bookId={book.id}
-              userId={user.id}
-              visibility="private"
-              existingReview={privateReview}
-              existingTagIds={privateTagIds}
-              allTags={allTags}
-              onSaved={(review, tagIds) => {
-                setPrivateReview(review)
-                setPrivateTagIds(tagIds)
-              }}
-            />
-          </div>
-          <div className="rounded-2xl bg-surface p-4 shadow-soft">
-            <h2 className="mb-2 font-display text-lg font-semibold text-ink">Your public review</h2>
-            <ReviewEditor
-              bookId={book.id}
-              userId={user.id}
-              visibility="public"
-              existingReview={publicReview}
-              existingTagIds={publicTagIds}
-              allTags={allTags}
-              onSaved={(review, tagIds) => {
-                setPublicReview(review)
-                setPublicTagIds(tagIds)
-                setPublicReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)])
-              }}
-            />
-          </div>
+        <section className="mb-6 rounded-2xl bg-surface p-4 shadow-soft">
+          <h2 className="mb-1 font-display text-lg font-semibold text-ink">My Notes</h2>
+          <p className="mb-3 font-sans text-xs text-muted">
+            Just for you. Never public unless you share it to a circle.
+          </p>
+          <ReviewEditor
+            bookId={book.id}
+            userId={user.id}
+            visibility="private"
+            existingReview={privateReview}
+            existingTagIds={privateTagIds}
+            allTags={allTags}
+            shareTargets={myCircles}
+            onShare={(circleId, body) => handleShareToCircle(circleId, body)}
+            onSaved={(review, tagIds) => {
+              setPrivateReview(review)
+              setPrivateTagIds(tagIds)
+            }}
+          />
         </section>
       )}
 
       <section className="mb-6 rounded-2xl bg-surface p-4 shadow-soft">
-        <h2 className="mb-2 font-display text-lg font-semibold text-ink">Public reviews</h2>
-        {publicReviews.length === 0 ? (
-          <p className="font-sans text-sm text-muted">No public reviews yet. Be the first.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {publicReviews.map((review) => (
-              <ReviewCard key={review.id} review={review} />
-            ))}
-          </ul>
+        <h2 className="mb-1 font-display text-lg font-semibold text-ink">Write a Review</h2>
+        <p className="mb-3 font-sans text-xs text-muted">Optional, and public once you save it.</p>
+        {user && (
+          <ReviewEditor
+            bookId={book.id}
+            userId={user.id}
+            visibility="public"
+            existingReview={publicReview}
+            existingTagIds={publicTagIds}
+            allTags={allTags}
+            shareTargets={myCircles}
+            onShare={(circleId, body) => handleShareToCircle(circleId, body)}
+            onSaved={(review, tagIds) => {
+              setPublicReview(review)
+              setPublicTagIds(tagIds)
+              setPublicReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)])
+            }}
+          />
         )}
+
+        <div className="mt-4 border-t border-line pt-4">
+          {publicReviews.length === 0 ? (
+            <p className="font-sans text-sm text-muted">
+              No public reviews yet. Be the first to share a thought.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {publicReviews.map((review) => (
+                <ReviewCard key={review.id} review={review} />
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
 
       <section className="rounded-2xl bg-surface p-4 shadow-soft">
-        <h2 className="mb-2 font-display text-lg font-semibold text-ink">Your circles</h2>
+        <h2 className="mb-1 font-display text-lg font-semibold text-ink">From your circle</h2>
+        <p className="mb-3 font-sans text-xs text-muted">Small rooms, not a public feed.</p>
 
         {myCircles.length === 0 ? (
           <p className="font-sans text-sm text-muted">
@@ -350,14 +422,11 @@ export function BookPage() {
             ) : (
               <ul className="mb-3 flex flex-col gap-2">
                 {circleReviews.map((review) => (
-                  <li
+                  <ReviewCard
                     key={review.id}
-                    className="rounded-xl border border-line p-3 font-sans text-sm"
-                  >
-                    <span className="font-bold text-ink">{review.profiles.display_name}</span>
-                    <span className="ml-2 text-xs text-muted">in {review.circles.name}</span>
-                    <p className="mt-1 whitespace-pre-wrap text-ink">{review.body}</p>
-                  </li>
+                    review={review}
+                    byline={`${review.profiles.display_name} in ${review.circles.name}`}
+                  />
                 ))}
               </ul>
             )}

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { saveReview } from '../../lib/reviews/data'
 import { setReviewTags } from '../../lib/tags/data'
-import type { BookTag, Review } from '../../types/database'
+import type { BookTag, Circle, Review } from '../../types/database'
 
 const TAG_TYPE_LABELS: Record<string, string> = {
   mood: 'Mood',
@@ -14,6 +14,11 @@ const TAG_TYPE_LABELS: Record<string, string> = {
  * One instance of this handles ONE review (private, public, or one specific
  * circle) — the Book Page renders one per visibility, since each is an
  * independent row (see reviews table comment in the schema).
+ *
+ * `shareTargets`/`onShare` are optional: when given (private and public
+ * reviews only, see BookPage.tsx), an existing review gets a "share to
+ * circle" affordance right here rather than a separate compose flow — it
+ * copies this review's body into a circle-visibility review.
  */
 export function ReviewEditor({
   bookId,
@@ -24,6 +29,8 @@ export function ReviewEditor({
   existingTagIds,
   allTags,
   onSaved,
+  shareTargets,
+  onShare,
 }: {
   bookId: string
   userId: string
@@ -33,6 +40,8 @@ export function ReviewEditor({
   existingTagIds: string[]
   allTags: BookTag[]
   onSaved: (review: Review, tagIds: string[]) => void
+  shareTargets?: Circle[]
+  onShare?: (circleId: string, body: string) => Promise<void>
 }) {
   const [body, setBody] = useState(existingReview?.body ?? '')
   const [containsSpoilers, setContainsSpoilers] = useState(
@@ -41,6 +50,11 @@ export function ReviewEditor({
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(existingTagIds)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [shareCircleId, setShareCircleId] = useState('')
+  const [sharing, setSharing] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [justShared, setJustShared] = useState(false)
 
   function toggleTag(tagId: string) {
     setSelectedTagIds((prev) =>
@@ -72,6 +86,21 @@ export function ReviewEditor({
     }
   }
 
+  async function handleShare() {
+    if (!onShare || !shareCircleId || !existingReview) return
+    setSharing(true)
+    setShareError(null)
+    try {
+      await onShare(shareCircleId, existingReview.body)
+      setJustShared(true)
+      window.setTimeout(() => setJustShared(false), 2000)
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : 'Could not share that. Try again.')
+    } finally {
+      setSharing(false)
+    }
+  }
+
   const tagsByType: Record<string, BookTag[]> = {}
   for (const tag of allTags) {
     ;(tagsByType[tag.type] ??= []).push(tag)
@@ -84,13 +113,13 @@ export function ReviewEditor({
         onChange={(e) => setBody(e.target.value)}
         placeholder={
           visibility === 'private'
-            ? 'Your private thoughts…'
+            ? 'Your private thoughts.'
             : visibility === 'circle'
-              ? 'Write a review for this circle…'
-              : 'Write a public review…'
+              ? 'Write a review for this circle.'
+              : 'Write a public review.'
         }
         rows={4}
-        className="rounded-md border border-stone-300 p-2"
+        className="rounded-2xl border border-line bg-page p-3 font-sans text-sm text-ink outline-none placeholder:text-muted"
         aria-label={
           visibility === 'private'
             ? 'Private journal entry'
@@ -100,32 +129,31 @@ export function ReviewEditor({
         }
       />
 
-      <label className="flex items-center gap-2 text-sm text-stone-700">
+      <label className="flex items-center gap-2 font-sans text-sm text-ink">
         <input
           type="checkbox"
           checked={containsSpoilers}
           onChange={(e) => setContainsSpoilers(e.target.checked)}
+          className="h-4 w-4 accent-sage"
         />
-        Contains spoilers
+        Has spoilers
       </label>
 
       <div className="flex flex-col gap-2">
         {Object.entries(tagsByType).map(([type, tags]) => (
           <div key={type}>
-            <span className="text-xs font-medium uppercase text-stone-500">
+            <span className="font-sans text-xs font-bold tracking-wide text-muted uppercase">
               {TAG_TYPE_LABELS[type] ?? type}
             </span>
-            <div className="mt-1 flex flex-wrap gap-1">
+            <div className="mt-1 flex flex-wrap gap-1.5">
               {tags.map((tag) => (
                 <button
                   key={tag.id}
                   type="button"
                   onClick={() => toggleTag(tag.id)}
                   aria-pressed={selectedTagIds.includes(tag.id)}
-                  className={`rounded-full border px-2 py-0.5 text-xs ${
-                    selectedTagIds.includes(tag.id)
-                      ? 'border-stone-900 bg-stone-900 text-white'
-                      : 'border-stone-300 text-stone-600'
+                  className={`rounded-full px-2.5 py-1 font-sans text-xs font-bold transition-transform active:scale-95 ${
+                    selectedTagIds.includes(tag.id) ? 'bg-leaf text-on-leaf' : 'bg-tint text-muted'
                   }`}
                 >
                   {tag.name}
@@ -136,15 +164,44 @@ export function ReviewEditor({
         ))}
       </div>
 
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {error && <p className="font-sans text-sm text-honey-text">{error}</p>}
 
       <button
         type="submit"
         disabled={saving}
-        className="self-start rounded-md bg-stone-900 px-4 py-1.5 text-sm text-white disabled:opacity-50"
+        className="self-start rounded-full bg-sage px-4 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95 disabled:opacity-50"
       >
         {saving ? 'Saving…' : existingReview ? 'Update' : 'Save'}
       </button>
+
+      {shareTargets && shareTargets.length > 0 && existingReview && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
+          <select
+            value={shareCircleId}
+            onChange={(e) => setShareCircleId(e.target.value)}
+            aria-label="Circle to share this with"
+            className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-xs text-ink"
+          >
+            <option value="" disabled>
+              Share to circle
+            </option>
+            {shareTargets.map((circle) => (
+              <option key={circle.id} value={circle.id}>
+                {circle.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void handleShare()}
+            disabled={!shareCircleId || sharing}
+            className="rounded-full bg-tint px-3 py-1.5 font-sans text-xs font-bold text-ink transition-transform active:scale-95 disabled:opacity-50"
+          >
+            {sharing ? 'Sharing…' : justShared ? 'Shared' : 'Share'}
+          </button>
+          {shareError && <span className="font-sans text-xs text-honey-text">{shareError}</span>}
+        </div>
+      )}
     </form>
   )
 }
