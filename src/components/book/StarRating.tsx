@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 const STAR_COUNT = 5
 const PULSE_MS = 220
@@ -47,10 +47,21 @@ export function StarRating({
   const [pulseStar, setPulseStar] = useState<number | null>(null)
   const displayValue = hoverValue ?? value ?? 0
 
+  // Tracked so a rapid second tap clears the first pulse's timer instead of
+  // stacking two, and so unmounting mid-pulse (e.g. navigating away right
+  // after rating) never calls setPulseStar on a gone component.
+  const pulseTimeoutRef = useRef<number | null>(null)
+  useEffect(() => {
+    return () => {
+      if (pulseTimeoutRef.current !== null) window.clearTimeout(pulseTimeoutRef.current)
+    }
+  }, [])
+
   function commit(next: number) {
     onChange(next)
     setPulseStar(Math.ceil(next))
-    window.setTimeout(() => setPulseStar(null), PULSE_MS)
+    if (pulseTimeoutRef.current !== null) window.clearTimeout(pulseTimeoutRef.current)
+    pulseTimeoutRef.current = window.setTimeout(() => setPulseStar(null), PULSE_MS)
   }
 
   function halfFromEvent(e: MouseEvent<HTMLButtonElement>, starIndex: number): number {
