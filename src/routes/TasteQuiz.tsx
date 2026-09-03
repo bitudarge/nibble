@@ -134,7 +134,7 @@ export function TasteQuiz() {
           type="button"
           onClick={() => void finish(true)}
           disabled={saveState === 'saving'}
-          className="mt-1 flex-none font-sans text-xs font-bold text-muted underline disabled:opacity-50"
+          className="mt-1 flex-none font-sans text-xs font-bold text-muted underline transition-opacity active:opacity-60 disabled:opacity-50"
         >
           Skip for now
         </button>

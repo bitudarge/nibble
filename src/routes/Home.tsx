@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
+import { useCelebration } from '../components/celebrate/useCelebration'
 import { CirclesIcon, RecsIcon } from '../components/layout/navIcons'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
@@ -8,6 +9,7 @@ import {
   countBooksFinishedInYear,
   getGoalForYear,
   getStreak,
+  isStreakMilestone,
   setGoalForYear,
 } from '../lib/goals/data'
 import { getRecommendations, type Recommendation } from '../lib/recommender'
@@ -49,6 +51,7 @@ function greeting(): string {
 
 export function Home() {
   const { user } = useAuth()
+  const { celebrate, node: celebrationNode } = useCelebration()
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
 
@@ -103,6 +106,7 @@ export function Home() {
 
   async function quickLogProgress(item: ShelfItemWithBook, toPage: number) {
     if (!user) return
+    const streakBefore = streak?.current_streak ?? 0
     try {
       await logReadingProgress(
         user.id,
@@ -124,6 +128,12 @@ export function Home() {
             : it,
         ),
       )
+      const streakAfter = await getStreak(user.id)
+      setStreak(streakAfter)
+      const after = streakAfter?.current_streak ?? 0
+      if (isStreakMilestone(streakBefore, after)) {
+        celebrate(`${after} days in a row. Keep it warm.`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not log progress.')
     }
@@ -171,6 +181,7 @@ export function Home() {
       className="mx-auto flex max-w-3xl flex-col gap-8"
       style={{ animation: 'nib-in 0.26s ease both' }}
     >
+      {celebrationNode}
       <div>
         <h1 className="font-display text-2xl font-semibold text-ink">
           {greeting()}, {firstName}.

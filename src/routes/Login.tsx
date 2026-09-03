@@ -27,7 +27,10 @@ export function Login() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-page px-4 text-center text-ink">
+    <main
+      className="flex min-h-screen flex-col items-center justify-center gap-6 bg-page px-4 text-center text-ink"
+      style={{ animation: 'nib-in 0.3s ease both' }}
+    >
       <h1>
         <Logo className="text-3xl" />
       </h1>

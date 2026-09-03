@@ -33,6 +33,18 @@ export async function setGoalForYear(
   return data as ReadingGoal
 }
 
+/**
+ * Whether a streak increase from `previous` to `current` deserves a
+ * celebration: the first small win at day 3, then every week after that.
+ * Not every single day, or the celebration stops feeling special; not
+ * only some arbitrary big number, or an early reader never sees one. Pure
+ * so it's testable without a database.
+ */
+export function isStreakMilestone(previous: number, current: number): boolean {
+  if (current <= previous) return false
+  return current === 3 || current % 7 === 0
+}
+
 export async function getStreak(userId: string): Promise<ReadingStreak | null> {
   const db = requireSupabase()
   const { data, error } = await db
