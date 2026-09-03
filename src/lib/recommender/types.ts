@@ -1,9 +1,37 @@
+/**
+ * What the onboarding taste quiz collected, in the shape it's edited in.
+ * `genres`/`pace`/`moods` are bare tag names (no "genre:"/"pace:"/"mood:"
+ * prefix) — see quizProfile.ts for where those get turned into tag keys.
+ * `favoriteBookIds` are real `books.id` rows (resolved via getOrCreateBook
+ * when picked), not raw search results.
+ */
+export interface TasteQuizAnswers {
+  genres: string[]
+  pace: string | null
+  moods: string[]
+  fictionLean: 'fiction' | 'mixed' | 'nonfiction' | null
+  favoriteBookIds: string[]
+  /** Informational only (not scored) — see quizProfile.ts. */
+  readingFrequency: string | null
+}
+
+/** The quiz's contribution to a taste profile: the raw answers (for re-editing) plus what they were turned into. */
+export interface TasteQuizProfile {
+  answers: TasteQuizAnswers
+  tagAffinity: Record<string, number>
+  takenAt: string
+  /** True if the user exited early rather than reaching the final step — still saved with whatever was answered, just a flag for future "finish it up?" UI, not used to zero anything out. */
+  skipped: boolean
+}
+
 /** A user's computed reading preferences — the shape stored in taste_profiles.profile. */
 export interface TasteProfileData {
-  /** e.g. "genre:fantasy" -> 0.8 (loved), "pace:slow-burn" -> -0.3 (disliked). Roughly -1..1. */
+  /** e.g. "genre:fantasy" -> 0.8 (loved), "pace:slow-burn" -> -0.3 (disliked). Roughly -1..1, combines quiz + rating signal, see tasteProfile.ts's mergeTagAffinity. */
   tagAffinity: Record<string, number>
   avgRating: number
   ratedBookCount: number
+  /** Present once the user has taken or skipped the quiz — see quizProfile.ts. */
+  quiz?: TasteQuizProfile
 }
 
 /** How often each tag was used across the reviews of one book — the book's "identity". */

@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/auth/useAuth'
 import { getWrapData, type WrapData } from '../lib/wrap/data'
 
+// TODO(Section 6): this page still has its pre-refinement plain styling —
+// only the "retake the quiz" link below uses the new design tokens, since
+// it's new content added in Section 4. The rest gets restyled in Section 6.
+
 type LoadState = 'loading' | 'error' | 'loaded'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -54,8 +58,16 @@ export function Wrap() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-stone-900">Your {year} Wrap</h1>
+        <Link
+          to="/quiz"
+          className="rounded-full bg-tint px-3 py-1.5 font-sans text-xs font-bold text-ink"
+        >
+          Retake the taste quiz
+        </Link>
+      </div>
+      <div className="mb-6 flex items-center justify-end">
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}

@@ -5,6 +5,7 @@ import { getBookTagProfiles } from './bookTagProfile'
 import { getCircleSignals } from './circleSignals'
 import { explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
+import type { TasteProfileData } from './types'
 
 // How many recently-added books to consider scoring. A known MVP limit: as
 // the catalog grows past this, older books stop being candidates at all.
@@ -19,8 +20,23 @@ export interface Recommendation {
 }
 
 /**
+ * True when there's not enough signal to personalize yet: too few ratings
+ * AND no quiz-seeded tag affinity either. A user who's taken the taste
+ * quiz gets scored recommendations right away even with zero ratings,
+ * since tagAffinity already carries quiz-derived signal by then (see
+ * mergeTagAffinity in tasteProfile.ts). Pure, so it's testable without a
+ * database.
+ */
+export function needsFallback(tasteProfile: TasteProfileData): boolean {
+  return (
+    tasteProfile.ratedBookCount < MIN_RATINGS_FOR_PERSONALIZATION &&
+    Object.keys(tasteProfile.tagAffinity).length === 0
+  )
+}
+
+/**
  * The recommender's one public entry point for "what should I read next".
- * Degrades gracefully: with too few ratings to personalize, falls back to
+ * Degrades gracefully: with no ratings and no quiz signal, falls back to
  * recently-added books with an honest label rather than a fake "why".
  */
 export async function getRecommendations(userId: string, limit = 10): Promise<Recommendation[]> {
@@ -29,14 +45,14 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
 
   const tasteProfile = await getOrComputeTasteProfile(userId)
 
-  if (tasteProfile.ratedBookCount < MIN_RATINGS_FOR_PERSONALIZATION) {
+  if (needsFallback(tasteProfile)) {
     const remaining = MIN_RATINGS_FOR_PERSONALIZATION - tasteProfile.ratedBookCount
     const fallback = await getRecentlyAddedBooks(shelvedBookIds, limit)
     return fallback.map((book) => ({
       book,
       score: 0,
       why: [
-        `Rate ${remaining} more book${remaining === 1 ? '' : 's'} to personalize this — showing recently added books for now.`,
+        `Rate ${remaining} more book${remaining === 1 ? '' : 's'} to personalize this, or take the taste quiz for a head start. Showing recently added books for now.`,
       ],
     }))
   }
