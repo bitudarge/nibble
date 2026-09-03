@@ -11,12 +11,34 @@ function requireSupabase() {
 export const MIN_RATINGS_FOR_PERSONALIZATION = 3
 
 /**
- * Builds a taste profile from scratch off the user's ratings: for each
- * rated book, weight its tags by how far that rating sits from the user's
- * own average (a 5★ from someone who averages 3★ says more than a 5★ from
- * someone who averages 4.5★), then normalize to roughly [-1, 1].
+ * Adds two tag-affinity maps together per tag key. Used to combine
+ * quiz-seeded affinity with rating-derived affinity so a rating never
+ * silently wipes out what the taste quiz already established — the two
+ * are meant to layer, not replace each other.
  */
-export async function computeTasteProfile(userId: string): Promise<TasteProfileData> {
+export function mergeTagAffinity(
+  quizAffinity: Record<string, number> | undefined,
+  ratingAffinity: Record<string, number>,
+): Record<string, number> {
+  const merged: Record<string, number> = { ...(quizAffinity ?? {}) }
+  for (const [tag, value] of Object.entries(ratingAffinity)) {
+    merged[tag] = (merged[tag] ?? 0) + value
+  }
+  return merged
+}
+
+/**
+ * The ratings-only half of a taste profile: for each rated book, weight
+ * its tags by how far that rating sits from the user's own average (a 5★
+ * from someone who averages 3★ says more than a 5★ from someone who
+ * averages 4.5★), then normalize to roughly [-1, 1]. Kept separate from
+ * computeTasteProfile (which also blends in quiz signal) so
+ * quizProfile.ts's saveQuizAnswers can reuse this exact computation
+ * without duplicating it or double-merging an already-merged profile.
+ */
+export async function computeRatingBasedProfile(
+  userId: string,
+): Promise<Omit<TasteProfileData, 'quiz'>> {
   const db = requireSupabase()
   const { data: ratings, error } = await db
     .from('ratings')
@@ -52,6 +74,30 @@ export async function computeTasteProfile(userId: string): Promise<TasteProfileD
   }
 
   return { tagAffinity, avgRating, ratedBookCount: ratings.length }
+}
+
+/**
+ * The full taste profile: fresh ratings-derived affinity merged with
+ * whatever quiz signal is already saved (read straight from the DB, so a
+ * quiz taken moments ago and years of ratings both show up correctly).
+ * Quiz answers are only ever read here, never written — saveQuizAnswers
+ * in quizProfile.ts is the one place that writes them.
+ */
+export async function computeTasteProfile(userId: string): Promise<TasteProfileData> {
+  const db = requireSupabase()
+  const [{ data: existingRow, error: existingError }, ratingBased] = await Promise.all([
+    db.from('taste_profiles').select('profile').eq('user_id', userId).maybeSingle(),
+    computeRatingBasedProfile(userId),
+  ])
+  if (existingError) throw existingError
+
+  const existingQuiz = (existingRow?.profile as TasteProfileData | undefined)?.quiz
+
+  return {
+    ...ratingBased,
+    tagAffinity: mergeTagAffinity(existingQuiz?.tagAffinity, ratingBased.tagAffinity),
+    quiz: existingQuiz,
+  }
 }
 
 export async function saveTasteProfile(userId: string, profile: TasteProfileData): Promise<void> {

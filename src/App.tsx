@@ -10,6 +10,7 @@ import { Recommendations } from './routes/Recommendations'
 import { RequireAuth } from './routes/RequireAuth'
 import { Search } from './routes/Search'
 import { Shelves } from './routes/Shelves'
+import { TasteQuiz } from './routes/TasteQuiz'
 import { Wrap } from './routes/Wrap'
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
             <Route path="/circles/:circleId" element={<CircleHome />} />
             <Route path="/recommendations" element={<Recommendations />} />
             <Route path="/wrap" element={<Wrap />} />
+            <Route path="/quiz" element={<TasteQuiz />} />
           </Route>
         </Routes>
       </AuthProvider>
