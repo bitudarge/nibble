@@ -145,3 +145,24 @@ export async function saveReview(input: ReviewInput, existingId: string | null):
   void recomputeTasteProfile(input.userId)
   return data as Review
 }
+
+/**
+ * "Share to circle": copies an existing private or public review's body
+ * into a circle-visibility review for the chosen circle, one tap, not a
+ * new compose flow. Updates the user's existing circle review for that
+ * circle if they already have one, otherwise creates it. Doesn't touch
+ * tags (the shared copy starts untagged; the user can tag it separately
+ * from the circle review's own editor if they want to).
+ */
+export async function shareReviewToCircle(
+  userId: string,
+  bookId: string,
+  circleId: string,
+  body: string,
+): Promise<Review> {
+  const existing = await getOwnCircleReview(userId, bookId, circleId)
+  return saveReview(
+    { bookId, userId, body, containsSpoilers: false, visibility: 'circle', circleId },
+    existing?.id ?? null,
+  )
+}
