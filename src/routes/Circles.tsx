@@ -74,34 +74,38 @@ export function Circles() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl">
-      <h1 className="mb-6 text-2xl font-semibold text-stone-900">Circles</h1>
+    <div className="mx-auto max-w-2xl" style={{ animation: 'nib-in 0.26s ease both' }}>
+      <h1 className="mb-1 font-display text-2xl font-semibold text-ink">Your circles</h1>
+      <p className="mb-5 font-sans text-sm text-muted">Small rooms, not a public feed.</p>
 
       {error && (
-        <p className="mb-4 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+        <p className="mb-4 rounded-2xl border border-line bg-surface p-3 font-sans text-sm text-ink shadow-soft">
           {error}
         </p>
       )}
 
-      {state === 'loading' && <p className="text-stone-500">Loading…</p>}
+      {state === 'loading' && <p className="font-sans text-muted">Finding your circles…</p>}
 
       {state === 'error' && !error && (
-        <p className="text-stone-500">Something went wrong loading your circles.</p>
+        <p className="font-sans text-muted">Something went wrong loading your circles.</p>
       )}
 
       {state === 'loaded' && (
-        <section className="mb-8">
+        <section className="mb-6">
           {circles.length === 0 ? (
-            <p className="text-stone-500">You're not in any circles yet.</p>
+            <p className="font-sans text-sm text-muted">
+              You're not in any circles yet. Start one below, or join with a friend's code.
+            </p>
           ) : (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-3">
               {circles.map((circle) => (
                 <li key={circle.id}>
                   <Link
                     to={`/circles/${circle.id}`}
-                    className="block rounded-md border border-stone-200 p-3 font-medium text-stone-900 hover:border-stone-400"
+                    className="flex items-center justify-between rounded-3xl bg-surface p-4 font-sans shadow-soft transition-transform active:scale-[0.98]"
                   >
-                    {circle.name}
+                    <span className="font-display text-lg font-bold text-ink">{circle.name}</span>
+                    <span className="text-sm font-bold text-muted">View →</span>
                   </Link>
                 </li>
               ))}
@@ -110,23 +114,24 @@ export function Circles() {
         </section>
       )}
 
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="flex flex-col gap-4 sm:grid sm:grid-cols-2 sm:gap-4">
         <form
           onSubmit={(e) => void handleCreate(e)}
-          className="rounded-md border border-stone-200 p-4"
+          className="rounded-3xl bg-surface p-4 shadow-soft"
         >
-          <h2 className="mb-2 font-medium text-stone-900">Create a circle</h2>
+          <h2 className="mb-3 font-sans text-base font-extrabold text-ink">Start a circle</h2>
           <input
             type="text"
             value={newCircleName}
             onChange={(e) => setNewCircleName(e.target.value)}
             placeholder="Circle name"
-            className="mb-2 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm"
+            aria-label="Circle name"
+            className="mb-3 h-11 w-full rounded-full border-2 border-line bg-page px-4 font-sans text-sm text-ink outline-none placeholder:text-muted"
           />
           <button
             type="submit"
             disabled={!newCircleName.trim() || creating}
-            className="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            className="h-11 w-full rounded-full bg-sage font-sans text-sm font-extrabold text-surface transition-transform active:scale-95 disabled:opacity-50"
           >
             {creating ? 'Creating…' : 'Create'}
           </button>
@@ -134,20 +139,21 @@ export function Circles() {
 
         <form
           onSubmit={(e) => void handleJoin(e)}
-          className="rounded-md border border-stone-200 p-4"
+          className="rounded-3xl bg-surface p-4 shadow-soft"
         >
-          <h2 className="mb-2 font-medium text-stone-900">Join a circle</h2>
+          <h2 className="mb-3 font-sans text-base font-extrabold text-ink">Join with a code</h2>
           <input
             type="text"
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value)}
             placeholder="Invite code"
-            className="mb-2 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm"
+            aria-label="Invite code"
+            className="mb-3 h-11 w-full rounded-full border-2 border-line bg-page px-4 font-sans text-sm text-ink outline-none placeholder:text-muted"
           />
           <button
             type="submit"
             disabled={!joinCode.trim() || joining}
-            className="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            className="h-11 w-full rounded-full border-2 border-line bg-page font-sans text-sm font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-50"
           >
             {joining ? 'Joining…' : 'Join'}
           </button>
