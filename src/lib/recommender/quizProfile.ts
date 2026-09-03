@@ -1,55 +1,33 @@
 import { getBookById } from '../books/data'
 import { supabase } from '../supabase/client'
 import { computeRatingBasedProfile, mergeTagAffinity, saveTasteProfile } from './tasteProfile'
+// Re-exported below for existing importers (TasteQuiz.tsx) — the
+// vocabulary/matcher live in their own leaf module now, see
+// tagVocabulary.ts's file comment for why (breaks an import cycle with
+// bookTagProfile.ts, which also needs matchCategoryToGenreTag).
+import {
+  matchCategoryToGenreTag,
+  QUIZ_GENRE_OPTIONS,
+  QUIZ_HEAVY_MOOD_OPTIONS,
+  QUIZ_LIGHT_MOOD_OPTIONS,
+  QUIZ_PACE_OPTIONS,
+  QUIZ_READING_FREQUENCY_OPTIONS,
+} from './tagVocabulary'
 import type { TasteProfileData, TasteQuizAnswers, TasteQuizProfile } from './types'
+
+export {
+  matchCategoryToGenreTag,
+  QUIZ_GENRE_OPTIONS,
+  QUIZ_HEAVY_MOOD_OPTIONS,
+  QUIZ_LIGHT_MOOD_OPTIONS,
+  QUIZ_PACE_OPTIONS,
+  QUIZ_READING_FREQUENCY_OPTIONS,
+}
 
 function requireSupabase() {
   if (!supabase) throw new Error('Supabase is not configured — check your .env file.')
   return supabase
 }
-
-/**
- * Tap-able options for the quiz, in the exact vocabulary
- * supabase/migrations/20260901000004_seed_book_tags.sql seeds `book_tags`
- * with — quiz-derived affinity only matches real books if the tag names
- * line up exactly, so keep this list in sync if that seed migration ever
- * changes.
- */
-export const QUIZ_GENRE_OPTIONS = [
-  'fantasy',
-  'sci-fi',
-  'romance',
-  'mystery',
-  'thriller',
-  'literary-fiction',
-  'historical-fiction',
-  'horror',
-  'memoir',
-  'young-adult',
-  'contemporary',
-  'classics',
-  'poetry',
-  'graphic-novel',
-  // 'non-fiction' deliberately excluded here — the fiction/non-fiction
-  // lean question covers that on its own.
-] as const
-
-export const QUIZ_PACE_OPTIONS = ['slow-burn', 'moderate', 'fast-paced', 'page-turner'] as const
-
-export const QUIZ_LIGHT_MOOD_OPTIONS = ['cozy', 'heartwarming', 'funny', 'uplifting'] as const
-export const QUIZ_HEAVY_MOOD_OPTIONS = [
-  'dark',
-  'tense',
-  'melancholic',
-  'thought-provoking',
-] as const
-
-export const QUIZ_READING_FREQUENCY_OPTIONS = [
-  'a book a week',
-  'a book a month',
-  'a few a year',
-  'getting back into it',
-] as const
 
 // An explicit pick says more than an inferred one (a favorite book's
 // genre), which says more than a soft fiction/non-fiction lean.
@@ -59,39 +37,6 @@ const MOOD_PICK_WEIGHT = 0.5
 const FAVORITE_BOOK_GENRE_WEIGHT = 0.5
 const NONFICTION_LEAN_WEIGHT = 0.7
 const MIXED_LEAN_WEIGHT = 0.3
-
-// Google Books' categories are free-text ("Fiction / Science Fiction /
-// General") and don't line up 1:1 with our fixed tag vocabulary, so a
-// bare substring check misses common real cases (nobody writes "sci-fi"
-// in a Google Books category). This is the small set of synonyms that
-// actually shows up in practice; falls back to a plain hyphen-to-space
-// substring check for everything else.
-const GENRE_SYNONYMS: Partial<Record<string, string[]>> = {
-  'sci-fi': ['science fiction', 'sci-fi', 'sci fi'],
-  'literary-fiction': ['literary fiction'],
-  'historical-fiction': ['historical fiction'],
-  'young-adult': ['young adult', 'juvenile fiction'],
-  'graphic-novel': ['graphic novel', 'comics'],
-  memoir: ['biography', 'autobiography', 'memoir'],
-  'non-fiction': ['non-fiction', 'nonfiction'],
-}
-
-const ALL_GENRE_TAGS = [...QUIZ_GENRE_OPTIONS, 'non-fiction']
-
-/**
- * Matches one Google Books category string against our genre tag
- * vocabulary with a loose, case-insensitive check. Returns null rather
- * than guessing when nothing lines up — a missed match just means one
- * less signal, not a wrong one.
- */
-export function matchCategoryToGenreTag(category: string): string | null {
-  const lower = category.toLowerCase()
-  for (const genre of ALL_GENRE_TAGS) {
-    const synonyms = GENRE_SYNONYMS[genre] ?? [genre.replace(/-/g, ' ')]
-    if (synonyms.some((synonym) => lower.includes(synonym))) return genre
-  }
-  return null
-}
 
 /**
  * Turns quiz answers (plus the Google Books categories of any favorite

@@ -16,19 +16,37 @@ words) / total, using the hand-picked lists in `lexicon.ts`. Stored on the
 review row (`reviews.sentiment_score`, `reviews.extracted_themes`).
 
 **2. Book tag profiles** (`bookTagProfile.ts`) — a book's "identity" for
-scoring is just how often each tag (mood/pace/spice_level/genre) has been
-used across its reviews. RLS on `review_tags` mirrors each review's own
-visibility, so this naturally only counts tags from reviews the requesting
-user can actually see — no extra privacy logic needed here.
+scoring is how often each tag (mood/pace/spice_level/genre) has been used
+across its reviews, PLUS a `genre:*` signal inferred from its Google Books
+categories (`addCategoryTagCounts`, reusing the same category-to-tag
+matcher as the taste quiz's favorite-book picks, `matchCategoryToGenreTag`
+in `quizProfile.ts`). The category half matters a lot early on: most books
+have zero reviews for a long while, so `review_tags` alone would leave the
+scorer with nothing to match against — Google Books categories are the
+only genre signal most candidate books have until real reviews accumulate.
+RLS on `review_tags` mirrors each review's own visibility, so the
+review-derived half naturally only counts tags from reviews the requesting
+user can actually see — no extra privacy logic needed there; the
+category-derived half comes straight off the book row, which every
+signed-in user can already read.
 
-**3. Taste profiles** (`tasteProfile.ts`) — for each book a user rated,
-weight its tags by how far that rating sits from the user's own average (a
-5★ from someone averaging 3★ says more than a 5★ from someone averaging
-4.5★), accumulate per tag, normalize to roughly [−1, 1]. Stored in
-`taste_profiles.profile` so it doesn't need recomputing on every page load.
-Recomputed whenever a rating or review is saved (see `reviews/data.ts` and
-`ratings/data.ts`) — call `recomputeTasteProfile(userId)` any other time
-it needs refreshing on demand.
+**3. Taste profiles** (`tasteProfile.ts`) — two layers, added together
+rather than one replacing the other (`mergeTagAffinity`):
+
+- _Rating-based_: for each book a user rated, weight its tags by how far
+  that rating sits from the user's own average (a 5★ from someone
+  averaging 3★ says more than a 5★ from someone averaging 4.5★),
+  accumulate per tag, normalize to roughly [−1, 1].
+- _Quiz-based_: answers from the onboarding taste quiz (`quizProfile.ts`,
+  `TasteQuiz.tsx`), each a direct or inferred `genre:*`/`pace:*`/`mood:*`
+  affinity. This is what makes day-one recommendations possible before a
+  user has rated anything — see `computeTasteProfile`'s doc comment.
+
+Stored in `taste_profiles.profile` so it doesn't need recomputing on every
+page load. Recomputed whenever a rating or review is saved (see
+`reviews/data.ts` and `ratings/data.ts`), or the quiz is retaken (see
+`saveQuizAnswers`) — call `recomputeTasteProfile(userId)` any other time it
+needs refreshing on demand.
 
 **4. Circle signals** (`circleSignals.ts`) — for each candidate book,
 check whether the user's circle-mates rated it, weighted by "taste
@@ -48,10 +66,13 @@ signal, it says so ("we don't have a specific reason yet") instead of
 inventing one.
 
 **6. Orchestration** (`recommend.ts`) — the one function everything else
-calls: `getRecommendations(userId)`. Degrades gracefully: fewer than
-`MIN_RATINGS_FOR_PERSONALIZATION` (currently 3) ratings and it falls back
-to recently-added books, clearly labeled as not personalized — never a fake
-tag-match explanation for a taste profile that doesn't exist yet.
+calls: `getRecommendations(userId)`. Degrades gracefully (`needsFallback`):
+falls back to recently-added books, clearly labeled as not personalized,
+only when there's truly no signal at all, fewer than
+`MIN_RATINGS_FOR_PERSONALIZATION` (currently 3) ratings AND no quiz-seeded
+tag affinity either. A user who took the taste quiz gets scored, explained
+recommendations from their very first visit, zero ratings needed — never a
+fake tag-match explanation for a taste profile that doesn't exist yet.
 
 ## Public interface
 
