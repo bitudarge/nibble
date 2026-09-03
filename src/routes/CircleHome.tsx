@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { StartCircleReadForm } from '../components/circles/StartCircleReadForm'
 import { useAuth } from '../lib/auth/useAuth'
@@ -21,6 +21,50 @@ import {
 import type { Circle } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded' | 'not-found'
+
+function SectionHeading({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {icon}
+      <h2 className="font-sans text-lg font-extrabold text-ink">{children}</h2>
+    </div>
+  )
+}
+
+const iconProps = {
+  width: 19,
+  height: 19,
+  viewBox: '0 0 24 24',
+  fill: 'none' as const,
+  strokeWidth: 2.1,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+}
+
+function ReadingTogetherIcon() {
+  return (
+    <svg {...iconProps} stroke="var(--nibbles-sage)">
+      <path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5z" />
+      <path d="M20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5z" />
+    </svg>
+  )
+}
+
+function DiscussionIcon() {
+  return (
+    <svg {...iconProps} stroke="var(--nibbles-sage)">
+      <path d="M4.5 5.5h15v10h-9l-6 4z" />
+    </svg>
+  )
+}
+
+function ShowcaseIcon() {
+  return (
+    <svg {...iconProps} stroke="var(--nibbles-honey)">
+      <path d="M7 4h10v16l-5-3.4L7 20z" />
+    </svg>
+  )
+}
 
 export function CircleHome() {
   const { circleId } = useParams<{ circleId: string }>()
@@ -107,91 +151,108 @@ export function CircleHome() {
   }
 
   if (state === 'loading') {
-    return <p className="text-stone-500">Loading…</p>
+    return <p className="font-sans text-muted">Finding your circle…</p>
   }
 
   if (state === 'not-found') {
     return (
-      <p className="text-stone-500">
-        That circle couldn't be found — you may not be a member, or the invite link is wrong.
+      <p className="font-sans text-muted">
+        That circle couldn't be found. You may not be a member, or the invite link is wrong.
       </p>
     )
   }
 
   if (state === 'error' || !circle) {
     return (
-      <div className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800">
+      <div className="rounded-2xl border border-line bg-surface p-4 font-sans text-ink shadow-soft">
         {error ?? 'Something went wrong loading this circle.'}
       </div>
     )
   }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+    <div
+      className="mx-auto flex max-w-3xl flex-col gap-8"
+      style={{ animation: 'nib-in 0.26s ease both' }}
+    >
       <div>
-        <h1 className="text-2xl font-semibold text-stone-900">{circle.name}</h1>
-        <p className="text-sm text-stone-500">
-          Invite code: <span className="font-mono">{circle.join_code}</span> — share this with
-          friends so they can join.
+        <h1 className="font-display text-2xl font-semibold text-ink">{circle.name}</h1>
+        <p className="mt-1 font-sans text-sm text-muted">
+          Invite code <span className="font-bold text-ink">{circle.join_code}</span>
         </p>
       </div>
 
       {error && (
-        <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+        <p className="rounded-2xl border border-line bg-surface p-3 font-sans text-sm text-ink shadow-soft">
           {error}
         </p>
       )}
 
       <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Members ({members.length})</h2>
-        <ul className="flex flex-wrap gap-3">
+        <h2 className="mb-3 font-sans text-sm font-bold tracking-wide text-muted uppercase">
+          Members ({members.length})
+        </h2>
+        <ul className="flex flex-wrap gap-2">
           {members.map((member) => (
-            <li key={member.id} className="flex items-center gap-2 text-sm text-stone-700">
+            <li
+              key={member.id}
+              className="flex items-center gap-2 rounded-full bg-surface py-1.5 pr-3.5 pl-1.5 shadow-soft"
+            >
               {member.profiles.avatar_url ? (
-                <img src={member.profiles.avatar_url} alt="" className="h-6 w-6 rounded-full" />
+                <img src={member.profiles.avatar_url} alt="" className="h-7 w-7 rounded-full" />
               ) : (
                 <span
                   aria-hidden
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-200 text-xs"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-leaf font-sans text-xs font-bold text-on-leaf"
                 >
                   {member.profiles.display_name.charAt(0).toUpperCase()}
                 </span>
               )}
-              {member.profiles.display_name}
-              {member.role === 'owner' && <span className="text-xs text-stone-400">(owner)</span>}
+              <span className="font-sans text-sm font-bold text-ink">
+                {member.profiles.display_name}
+              </span>
+              {member.role === 'owner' && (
+                <span className="font-sans text-xs text-muted">owner</span>
+              )}
             </li>
           ))}
         </ul>
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Reading together</h2>
+        <SectionHeading icon={<ReadingTogetherIcon />}>Reading together</SectionHeading>
         <div className="mb-3 flex flex-col gap-3">
           {reads.length === 0 ? (
-            <p className="text-stone-500">Nothing started yet.</p>
+            <p className="font-sans text-sm text-muted">Nothing started yet.</p>
           ) : (
             reads.map((read) => (
-              <div key={read.id} className="rounded-md border border-stone-200 p-3">
-                <Link to={`/book/${read.book_id}`} className="font-medium text-stone-900">
+              <div key={read.id} className="rounded-3xl bg-surface p-4 shadow-soft">
+                <Link
+                  to={`/book/${read.book_id}`}
+                  className="font-display text-lg font-semibold text-ink"
+                >
                   {read.books.title}
                 </Link>
                 {read.target_finish_date && (
-                  <p className="text-xs text-stone-500">Target: {read.target_finish_date}</p>
+                  <p className="mt-0.5 mb-3 font-sans text-xs text-muted">
+                    Target finish {read.target_finish_date}
+                  </p>
                 )}
-                <ul className="mt-2 flex flex-col gap-1">
+                <ul className="flex flex-col gap-2.5">
                   {(progressByBook[read.book_id] ?? []).map((progress) => (
-                    <li
-                      key={progress.id}
-                      className="flex items-center gap-2 text-xs text-stone-600"
-                    >
-                      <span className="w-24 truncate">{progress.profiles.display_name}</span>
-                      <div className="h-1.5 flex-1 rounded-full bg-stone-100">
+                    <li key={progress.id} className="flex items-center gap-2.5">
+                      <span className="w-16 flex-none truncate font-sans text-xs font-bold text-muted">
+                        {progress.profiles.display_name}
+                      </span>
+                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-tint">
                         <div
-                          className="h-1.5 rounded-full bg-stone-900"
+                          className="h-full rounded-full bg-sage"
                           style={{ width: `${Math.min(progress.percent_complete ?? 0, 100)}%` }}
                         />
                       </div>
-                      <span>{Math.round(progress.percent_complete ?? 0)}%</span>
+                      <span className="w-9 flex-none text-right font-sans text-xs font-bold text-muted">
+                        {Math.round(progress.percent_complete ?? 0)}%
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -203,60 +264,95 @@ export function CircleHome() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Discussion</h2>
-        <form onSubmit={(e) => void handlePostMessage(e)} className="mb-3 flex gap-2">
+        <SectionHeading icon={<DiscussionIcon />}>Discussion</SectionHeading>
+        <form
+          onSubmit={(e) => void handlePostMessage(e)}
+          className="mb-4 flex items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-soft"
+        >
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Say something to the circle…"
-            className="flex-1 rounded-md border border-stone-300 px-3 py-1.5 text-sm"
+            placeholder="Say something warm"
+            aria-label="Message"
+            className="h-10 min-w-0 flex-1 border-none bg-transparent font-sans text-sm text-ink outline-none placeholder:text-muted"
           />
           <button
             type="submit"
             disabled={!newMessage.trim() || posting}
-            className="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            aria-label="Post"
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sage text-surface transition-transform active:scale-90 disabled:opacity-50"
           >
-            {posting ? 'Posting…' : 'Post'}
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M4 20l16-8L4 4v6l10 2-10 2z" fill="currentColor" />
+            </svg>
           </button>
         </form>
         {messages.length === 0 ? (
-          <p className="text-stone-500">No messages yet — say hello.</p>
+          <p className="font-sans text-sm text-muted">No messages yet. Say hello.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {messages.map((message) => (
-              <li key={message.id} className="rounded-md border border-stone-200 p-2 text-sm">
-                <span className="font-medium text-stone-900">{message.profiles.display_name}</span>{' '}
-                <span className="text-stone-700">{message.body}</span>
-                {message.books && (
-                  <Link
-                    to={`/book/${message.book_id}`}
-                    className="ml-1 text-xs text-stone-500 underline"
+          <ul className="flex flex-col gap-2.5">
+            {messages.map((message) => {
+              const isOwn = message.user_id === user?.id
+              return (
+                <li
+                  key={message.id}
+                  className={`flex items-end gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}
+                >
+                  <span
+                    aria-hidden
+                    className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-leaf font-sans text-xs font-bold text-on-leaf"
                   >
-                    ({message.books.title})
-                  </Link>
-                )}
-              </li>
-            ))}
+                    {message.profiles.display_name.charAt(0).toUpperCase()}
+                  </span>
+                  <div
+                    className={`max-w-[78%] px-3.5 py-2.5 font-sans text-sm shadow-soft ${
+                      isOwn
+                        ? 'rounded-[20px_20px_6px_20px] bg-sage text-surface'
+                        : 'rounded-[20px_20px_20px_6px] bg-surface text-ink'
+                    }`}
+                  >
+                    {message.body}
+                    {message.books && (
+                      <Link
+                        to={`/book/${message.book_id}`}
+                        className={`mt-1 block text-xs font-bold underline ${isOwn ? 'text-surface/80' : 'text-muted'}`}
+                      >
+                        {message.books.title}
+                      </Link>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Circle reviews</h2>
+        <h2 className="mb-3 font-sans text-sm font-bold tracking-wide text-muted uppercase">
+          Circle reviews
+        </h2>
         {reviews.length === 0 ? (
-          <p className="text-stone-500">No circle-only reviews yet.</p>
+          <p className="font-sans text-sm text-muted">No circle-only reviews yet.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col gap-2.5">
             {reviews.map((review) => (
-              <li key={review.id} className="rounded-md border border-stone-200 p-3 text-sm">
-                <Link to={`/book/${review.book_id}`} className="font-medium text-stone-900">
-                  {review.books.title}
-                </Link>
-                <span className="ml-2 text-xs text-stone-500">
-                  by {review.profiles.display_name}
-                </span>
-                <p className="mt-1 whitespace-pre-wrap text-stone-700">{review.body}</p>
+              <li key={review.id} className="rounded-2xl bg-surface p-3.5 shadow-soft">
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <Link
+                    to={`/book/${review.book_id}`}
+                    className="font-display text-sm font-semibold text-ink"
+                  >
+                    {review.books.title}
+                  </Link>
+                  <span className="font-sans text-xs text-muted">
+                    by {review.profiles.display_name}
+                  </span>
+                </div>
+                <p className="mt-1.5 font-sans text-sm whitespace-pre-wrap text-ink">
+                  {review.body}
+                </p>
               </li>
             ))}
           </ul>
@@ -264,29 +360,37 @@ export function CircleHome() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-lg font-medium text-stone-900">Showcase</h2>
+        <SectionHeading icon={<ShowcaseIcon />}>Showcase</SectionHeading>
         {showcase.length === 0 ? (
-          <p className="text-stone-500">No finished books to show yet.</p>
+          <p className="font-sans text-sm text-muted">No finished books to show yet.</p>
         ) : (
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {showcase.map((item) => (
               <li key={item.id}>
-                <Link to={`/book/${item.book_id}`}>
+                <Link to={`/book/${item.book_id}`} className="block">
                   {item.books.cover_url ? (
                     <img
                       src={item.books.cover_url}
                       alt=""
-                      className="h-28 w-full rounded object-cover"
+                      className="h-28 w-full rounded-xl object-cover shadow-soft"
                     />
                   ) : (
-                    <div className="flex h-28 w-full items-center justify-center rounded bg-stone-100 text-xs text-stone-400">
-                      No cover
+                    <div
+                      className="flex h-28 w-full items-center justify-center rounded-xl text-xs text-muted shadow-soft"
+                      style={{
+                        background:
+                          'repeating-linear-gradient(135deg, #E4EEE1 0 7px, #EFF5EC 7px 14px)',
+                      }}
+                    >
+                      No cover yet
                     </div>
                   )}
-                  <span className="mt-1 block text-xs font-medium text-stone-900">
+                  <span className="mt-1.5 block font-display text-xs font-semibold text-ink">
                     {item.books.title}
                   </span>
-                  <span className="block text-xs text-stone-500">{item.profiles.display_name}</span>
+                  <span className="block font-sans text-xs text-muted">
+                    {item.profiles.display_name}
+                  </span>
                 </Link>
               </li>
             ))}
