@@ -60,7 +60,7 @@ export function QuickNoteNudge({
           type="button"
           onClick={onSkip}
           disabled={saving}
-          className="flex-none font-sans text-sm font-bold text-muted"
+          className="flex-none font-sans text-sm font-bold text-muted transition-opacity active:opacity-60 disabled:opacity-50"
         >
           Skip
         </button>

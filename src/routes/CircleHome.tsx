@@ -281,7 +281,7 @@ export function CircleHome() {
             type="submit"
             disabled={!newMessage.trim() || posting}
             aria-label="Post"
-            className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sage text-surface transition-transform active:scale-90 disabled:opacity-50"
+            className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-sage text-surface transition-transform active:scale-90 disabled:opacity-50"
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M4 20l16-8L4 4v6l10 2-10 2z" fill="currentColor" />
