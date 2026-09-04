@@ -85,3 +85,20 @@ export function matchCategoryToGenreTag(category: string): string | null {
   }
   return null
 }
+
+/**
+ * The reverse direction: turns one of our genre tags into an Open Library
+ * subject slug ("sci-fi" -> "science_fiction") for genre-based discovery
+ * search (`src/lib/recommender/discovery.ts`). Reuses the same synonym
+ * list `matchCategoryToGenreTag` uses, so the two stay in sync — the first
+ * synonym listed is always the real-world phrase ("science fiction"), not
+ * our internal hyphenated tag name. Falls back to a plain hyphen-to-space
+ * conversion for genres with no synonym entry, which already matches Open
+ * Library's actual subject slugs for most of them (fantasy, romance,
+ * mystery, thriller, horror, poetry, classics). A slug Open Library
+ * doesn't recognize isn't an error, it just comes back with zero results.
+ */
+export function genreTagToSubjectSlug(genre: string): string {
+  const phrase = GENRE_SYNONYMS[genre]?.[0] ?? genre.replace(/-/g, ' ')
+  return phrase.trim().toLowerCase().replace(/\s+/g, '_')
+}
