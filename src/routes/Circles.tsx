@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { InviteCodeShare } from '../components/circles/InviteCodeShare'
 import { useAuth } from '../lib/auth/useAuth'
 import { createCircle, getMyCircles, joinCircleByCode } from '../lib/circles/data'
 import type { Circle } from '../types/database'
@@ -18,6 +19,11 @@ export function Circles() {
   const [creating, setCreating] = useState(false)
   const [joinCode, setJoinCode] = useState('')
   const [joining, setJoining] = useState(false)
+
+  // Set right after a successful create, instead of navigating straight
+  // to the circle page — the owner asked to be able to invite people at
+  // creation time, not have to go find the code somewhere else after.
+  const [justCreated, setJustCreated] = useState<Circle | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -52,9 +58,11 @@ export function Circles() {
     setError(null)
     try {
       const circle = await createCircle(user.id, newCircleName.trim())
-      navigate(`/circles/${circle.id}`)
+      setNewCircleName('')
+      setJustCreated(circle)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create that circle.')
+    } finally {
       setCreating(false)
     }
   }
@@ -71,6 +79,27 @@ export function Circles() {
       setError(err instanceof Error ? err.message : 'Could not join with that code.')
       setJoining(false)
     }
+  }
+
+  if (justCreated) {
+    return (
+      <div className="mx-auto max-w-lg text-center" style={{ animation: 'nib-in 0.26s ease both' }}>
+        <h1 className="mb-1 font-display text-2xl font-semibold text-ink">
+          {justCreated.name} is ready
+        </h1>
+        <p className="mb-5 font-sans text-sm text-muted">
+          Invite your first readers before you head in.
+        </p>
+        <InviteCodeShare circleName={justCreated.name} joinCode={justCreated.join_code} />
+        <button
+          type="button"
+          onClick={() => navigate(`/circles/${justCreated.id}`)}
+          className="mt-5 h-11 w-full rounded-full bg-sage font-sans text-sm font-extrabold text-surface transition-transform active:scale-95"
+        >
+          Continue to your circle
+        </button>
+      </div>
+    )
   }
 
   return (

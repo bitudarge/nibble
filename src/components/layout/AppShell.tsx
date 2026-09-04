@@ -1,18 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Logo } from '../brand/Logo'
 import { useAuth } from '../../lib/auth/useAuth'
 import { resolveDisplayIdentity } from '../../lib/profile/identity'
-import { useTheme } from '../../lib/theme/useTheme'
 import {
   CirclesIcon,
   DiscoverIcon,
   HamburgerIcon,
   HomeIcon,
-  MoonIcon,
   RecsIcon,
   ShelvesIcon,
-  SunIcon,
   YouIcon,
 } from './navIcons'
 
@@ -40,7 +37,6 @@ const NAV_ITEMS = [
  */
 export function AppShell() {
   const { user, profile, signOut } = useAuth()
-  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -102,30 +98,24 @@ export function AppShell() {
           <Logo variant="full" className="hidden h-8 md:block" />
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={
-              theme === 'light' ? 'Switch to nighttime reading' : 'Switch to daytime reading'
-            }
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-tint text-muted transition-transform active:scale-90"
-          >
-            {theme === 'light' ? <SunIcon /> : <MoonIcon className="text-honey" />}
-          </button>
-          <div className="hidden items-center gap-2 md:flex">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full" />
-            ) : (
-              <div
-                aria-hidden
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-sm font-bold text-on-leaf"
-              >
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Straight to the profile page (Wrap) — the whole point of showing
+            your own avatar here is to get back to your own profile. */}
+        <Link
+          to="/wrap"
+          aria-label="Go to your profile"
+          className="hidden items-center gap-2 rounded-full transition-transform active:scale-95 md:flex"
+        >
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full" />
+          ) : (
+            <div
+              aria-hidden
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-sm font-bold text-on-leaf"
+            >
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+          )}
+        </Link>
 
         {menuOpen && (
           <div
@@ -154,26 +144,31 @@ export function AppShell() {
             ))}
 
             <div className="mt-1 flex items-center gap-3 rounded-2xl border border-line bg-page px-3 py-2.5">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="h-9 w-9 flex-none rounded-full" />
-              ) : (
-                <div
-                  aria-hidden
-                  className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-leaf text-sm font-bold text-on-leaf"
-                >
-                  {displayName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold">{displayName}</div>
-                <button
-                  type="button"
-                  onClick={() => void handleSignOut()}
-                  className="text-xs font-semibold text-muted transition-colors hover:text-ink active:text-ink"
-                >
-                  Sign out
-                </button>
-              </div>
+              <Link
+                to="/wrap"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="h-9 w-9 flex-none rounded-full" />
+                ) : (
+                  <div
+                    aria-hidden
+                    className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-leaf text-sm font-bold text-on-leaf"
+                  >
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm font-bold">{displayName}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                className="flex-none text-xs font-semibold text-muted transition-colors hover:text-ink active:text-ink"
+              >
+                Sign out
+              </button>
             </div>
           </div>
         )}
