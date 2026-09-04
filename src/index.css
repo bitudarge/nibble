@@ -3,13 +3,13 @@
 /*
  * Nibbles design tokens, pulled from Nibbles-design-mockup.html.
  *
- * How this works: the raw hex values live as plain CSS variables below,
- * with a light set on :root and a dark set under [data-theme="dark"].
- * The @theme block then points Tailwind's color names (bg-page, text-ink,
- * etc.) at those variables via `var(--nibbles-*)`, so a class like
- * `bg-page` always resolves to whichever theme is active, light or dark,
- * without any extra work at the call site. See src/lib/theme/useTheme.ts
- * for how [data-theme] gets set.
+ * How this works: the raw hex values live as plain CSS variables on :root
+ * below. The @theme block then points Tailwind's color names (bg-page,
+ * text-ink, etc.) at those variables via `var(--nibbles-*)`, so a class
+ * like `bg-page` always resolves correctly without any extra work at the
+ * call site. Light only — a day/night toggle existed briefly (round 2
+ * section 1) and was removed at the owner's request, don't reintroduce a
+ * dark palette without being asked.
  */
 @theme {
   --font-display: 'Lora', Georgia, serif;
@@ -34,11 +34,6 @@
   --shadow-soft: 0 2px 8px var(--nibbles-shadow);
   --shadow-lift: 0 8px 24px var(--nibbles-shadow);
 }
-
-/* Lets `dark:` utilities key off data-theme="dark" (set by useTheme),
-   instead of Tailwind's default OS-preference-only behaviour, so the
-   in-app toggle actually drives them. */
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 :root {
   /* Greens sampled straight from the mascot art (nibbles-mascot.png): its
@@ -69,38 +64,11 @@
   --nibbles-shadow: rgba(31, 42, 26, 0.12);
 }
 
-[data-theme='dark'] {
-  /* Not pure black — a very dark, slightly green-tinted near-black, with
-     the same green family lightened enough to read on it, and near-white
-     text. */
-  --nibbles-page: #12160e;
-  --nibbles-surface: #1c2317;
-  --nibbles-ink: #f1f5ec;
-  --nibbles-muted: #9fb093;
-  --nibbles-line: #2c3524;
-  --nibbles-tint: #212a1a;
-
-  --nibbles-sage: #8fcb52;
-  --nibbles-sage-deep: #6fa83d;
-  --nibbles-leaf: #28331f;
-  --nibbles-on-leaf: #b7e08c;
-
-  --nibbles-honey: #a5d66b;
-  --nibbles-honey-soft: #2a3820;
-  --nibbles-honey-text: #c3e89a;
-
-  --nibbles-shadow: rgba(0, 0, 0, 0.5);
-}
-
 body {
   margin: 0;
   background: var(--nibbles-page);
   color: var(--nibbles-ink);
   color-scheme: light;
-}
-
-[data-theme='dark'] body {
-  color-scheme: dark;
 }
 
 /* A gentle fade-up used when a page/section first appears. */
