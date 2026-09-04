@@ -4,6 +4,7 @@ import { AuthProvider } from './lib/auth/AuthProvider'
 import { BookPage } from './routes/BookPage'
 import { CircleHome } from './routes/CircleHome'
 import { Circles } from './routes/Circles'
+import { EditProfile } from './routes/EditProfile'
 import { Home } from './routes/Home'
 import { Login } from './routes/Login'
 import { MyBooks } from './routes/MyBooks'
@@ -36,6 +37,7 @@ function App() {
             <Route path="/recommendations" element={<Recommendations />} />
             <Route path="/wrap" element={<Wrap />} />
             <Route path="/my-books" element={<MyBooks />} />
+            <Route path="/profile/edit" element={<EditProfile />} />
             <Route path="/quiz" element={<TasteQuiz />} />
           </Route>
         </Routes>

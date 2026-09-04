@@ -9,6 +9,7 @@ import { useAuth } from '../lib/auth/useAuth'
 import { enrichBook, getBookById } from '../lib/books/data'
 import { getMyCircles } from '../lib/circles/data'
 import { getStreak, isStreakMilestone } from '../lib/goals/data'
+import { resolveDisplayIdentity } from '../lib/profile/identity'
 import {
   getAggregateRating,
   getUserRating,
@@ -34,12 +35,11 @@ type LoadState = 'loading' | 'error' | 'loaded' | 'not-found'
 
 export function BookPage() {
   const { bookId } = useParams<{ bookId: string }>()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { celebrate, node: celebrationNode } = useCelebration()
   // For the optimistic comment shown the instant you post one, before the
   // real row (with its real profile join) comes back — see ReviewCard.tsx.
-  const rawName = user?.user_metadata?.full_name
-  const currentUserDisplayName = typeof rawName === 'string' && rawName ? rawName : undefined
+  const { displayName: currentUserDisplayName } = resolveDisplayIdentity(user, profile)
 
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)

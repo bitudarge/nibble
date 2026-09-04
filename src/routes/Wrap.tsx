@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { getMyCircles } from '../lib/circles/data'
 import { getStreak } from '../lib/goals/data'
 import { useAuth } from '../lib/auth/useAuth'
+import { resolveDisplayIdentity } from '../lib/profile/identity'
 import { getWrapData, type WrapData } from '../lib/wrap/data'
 import type { ReadingStreak } from '../types/database'
 
@@ -23,7 +24,7 @@ function formatTag(tag: string): string {
 }
 
 export function Wrap() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [year, setYear] = useState(CURRENT_YEAR)
   const [wrap, setWrap] = useState<WrapData | null>(null)
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
@@ -63,10 +64,7 @@ export function Wrap() {
     }
   }, [user, year])
 
-  const rawName = user?.user_metadata?.full_name
-  const displayName = typeof rawName === 'string' && rawName ? rawName : (user?.email ?? 'Reader')
-  const rawAvatar = user?.user_metadata?.avatar_url
-  const avatarUrl = typeof rawAvatar === 'string' ? rawAvatar : undefined
+  const { displayName, avatarUrl } = resolveDisplayIdentity(user, profile)
 
   return (
     <div className="mx-auto max-w-2xl" style={{ animation: 'nib-in 0.26s ease both' }}>
@@ -113,12 +111,20 @@ export function Wrap() {
         </Link>
       </div>
 
-      <Link
-        to="/my-books"
-        className="mb-5 block w-fit rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
-      >
-        My ratings and notes
-      </Link>
+      <div className="mb-5 flex flex-wrap gap-2">
+        <Link
+          to="/my-books"
+          className="block w-fit rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
+        >
+          My ratings and notes
+        </Link>
+        <Link
+          to="/profile/edit"
+          className="block w-fit rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
+        >
+          Edit profile
+        </Link>
+      </div>
 
       {state === 'loading' && <p className="font-sans text-muted">Building your wrap…</p>}
 
