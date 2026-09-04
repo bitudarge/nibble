@@ -379,7 +379,7 @@ export function CircleHome() {
                       className="flex h-28 w-full items-center justify-center rounded-xl text-xs text-muted shadow-soft"
                       style={{
                         background:
-                          'repeating-linear-gradient(135deg, #E4EEE1 0 7px, #EFF5EC 7px 14px)',
+                          'repeating-linear-gradient(135deg, #E3F2D9 0 7px, #F6FAF3 7px 14px)',
                       }}
                     >
                       No cover yet

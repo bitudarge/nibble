@@ -199,7 +199,7 @@ export function Wrap() {
                               className="flex h-32 w-full items-center justify-center rounded-xl text-xs text-muted shadow-soft"
                               style={{
                                 background:
-                                  'repeating-linear-gradient(135deg, #E9E0CC 0 7px, #F3EBD9 7px 14px)',
+                                  'repeating-linear-gradient(135deg, #DCE8D3 0 7px, #F6FAF3 7px 14px)',
                               }}
                             >
                               No cover yet
@@ -237,7 +237,7 @@ export function Wrap() {
                             className="flex h-24 w-full items-center justify-center rounded-lg text-[10px] text-muted shadow-soft"
                             style={{
                               background:
-                                'repeating-linear-gradient(135deg, #E9E0CC 0 7px, #F3EBD9 7px 14px)',
+                                'repeating-linear-gradient(135deg, #DCE8D3 0 7px, #F6FAF3 7px 14px)',
                             }}
                           >
                             No cover
