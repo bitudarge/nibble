@@ -11,6 +11,13 @@ Where the request was genuinely ambiguous, this doc states the coordinator's
 interpretation plainly, built on that interpretation, and flagged it in the
 relevant PR for the owner to correct if wrong.
 
+**Status: all 7 sections merged and deployed** (2026-09-03 to 2026-09-04).
+See CLAUDE.md's "Round 2" section for the PR-by-PR summary, including two
+real bugs found and fixed along the way and the still-open Supabase
+redirect-config item for fully retiring `nibble-jade.vercel.app`. This doc
+stays as the original plan/spec, not updated retroactively to describe what
+shipped, check CLAUDE.md and `git log` for actual current state.
+
 ## Brand assets now in the repo
 
 - `src/assets/brand/nibbles-mascot.png` - the caterpillar mascot alone,
