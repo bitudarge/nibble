@@ -113,6 +113,13 @@ export function Wrap() {
         </Link>
       </div>
 
+      <Link
+        to="/my-books"
+        className="mb-5 block w-fit rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
+      >
+        My ratings and notes
+      </Link>
+
       {state === 'loading' && <p className="font-sans text-muted">Building your wrap…</p>}
 
       {state === 'error' && (
