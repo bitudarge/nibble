@@ -109,6 +109,66 @@ describe('explainScore', () => {
     )
     const why = explainScore(scored)
     expect(why[0]).toMatch(/fantasy/)
+    expect(why[0]).toMatch(/rated/)
+  })
+
+  it('never claims a quiz-only user has rated something, that would be false', () => {
+    // Zero ratings, the only signal is quiz-seeded — this is exactly the
+    // day-one cold-start case the taste quiz exists for.
+    const scored = scoreBook(
+      {
+        tagAffinity: { 'genre:fantasy': 0.7 },
+        avgRating: 0,
+        ratedBookCount: 0,
+        quiz: {
+          answers: {
+            genres: ['fantasy'],
+            pace: null,
+            moods: [],
+            fictionLean: null,
+            favoriteBookIds: [],
+            readingFrequency: null,
+          },
+          tagAffinity: { 'genre:fantasy': 0.7 },
+          takenAt: '2026-01-01T00:00:00.000Z',
+          skipped: false,
+        },
+      },
+      { bookId: 'b', tagCounts: { 'genre:fantasy': 3 } },
+      [],
+    )
+    const why = explainScore(scored)
+    expect(why[0]).toMatch(/fantasy/)
+    expect(why[0]).toMatch(/you said you like/i)
+    expect(why.join(' ')).not.toMatch(/rated/i)
+  })
+
+  it('gives a separate sentence each for quiz-seeded and rating-derived matches', () => {
+    const scored = scoreBook(
+      {
+        tagAffinity: { 'genre:fantasy': 0.7, 'mood:cozy': 0.6 },
+        avgRating: 4,
+        ratedBookCount: 5,
+        quiz: {
+          answers: {
+            genres: ['fantasy'],
+            pace: null,
+            moods: [],
+            fictionLean: null,
+            favoriteBookIds: [],
+            readingFrequency: null,
+          },
+          tagAffinity: { 'genre:fantasy': 0.7 },
+          takenAt: '2026-01-01T00:00:00.000Z',
+          skipped: false,
+        },
+      },
+      { bookId: 'b', tagCounts: { 'genre:fantasy': 2, 'mood:cozy': 2 } },
+      [],
+    )
+    const why = explainScore(scored)
+    expect(why.some((r) => /you said you like/i.test(r) && /fantasy/.test(r))).toBe(true)
+    expect(why.some((r) => /rated/.test(r) && /cozy/.test(r))).toBe(true)
   })
 
   it('explains a circle-driven recommendation with the member name and overlap', () => {
