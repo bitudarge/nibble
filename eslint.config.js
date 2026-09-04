@@ -6,7 +6,11 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // .claude/worktrees holds temporary git worktrees for background agents —
+  // nested copies of this same repo, complete with their own tsconfig,
+  // which confuses ESLint's typescript-eslint parser about which
+  // tsconfigRootDir applies when more than one worktree is active at once.
+  { ignores: ['dist', '.claude'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

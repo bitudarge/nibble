@@ -19,11 +19,20 @@ export function scoreBook(
   const totalTagMentions =
     Object.values(bookTagProfile.tagCounts).reduce((sum, count) => sum + count, 0) || 1
 
+  // A tag counts as "from the quiz" if it's in the quiz's own tagAffinity
+  // map — that map only ever holds quiz-derived entries (see
+  // buildQuizTagAffinity in quizProfile.ts), so this is an exact check,
+  // not a guess. A tag can be both quiz-picked and later reinforced by
+  // ratings; explainScore treats "the quiz said so" as the honest framing
+  // either way, since that's always true regardless of whether ratings
+  // also agree.
+  const quizTagAffinity = tasteProfile.quiz?.tagAffinity ?? {}
+
   const tagMatches: TagMatch[] = Object.entries(bookTagProfile.tagCounts)
     .map(([tag, count]) => {
       const bookWeight = count / totalTagMentions
       const userAffinity = tasteProfile.tagAffinity[tag] ?? 0
-      return { tag, contribution: bookWeight * userAffinity }
+      return { tag, contribution: bookWeight * userAffinity, fromQuiz: tag in quizTagAffinity }
     })
     .filter((match) => Math.abs(match.contribution) > 0.001)
     .sort((a, b) => b.contribution - a.contribution)
@@ -85,23 +94,40 @@ function formatTagLabel(tag: string): string {
   }
 }
 
+function joinLabels(labels: string[]): string {
+  return labels.length === 1 ? labels[0]! : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`
+}
+
 /** Turns a ScoredBook into the plain-language "why" — never a black box. */
 export function explainScore(scored: ScoredBook): string[] {
   const reasons: string[] = []
 
   const positiveMatches = scored.tagMatches.filter((m) => m.contribution > 0).slice(0, 2)
   if (positiveMatches.length > 0) {
-    const labels = positiveMatches.map((m) => formatTagLabel(m.tag))
-    const joined =
-      labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`
-    reasons.push(`You've rated ${joined} highly before.`)
+    // Split by origin rather than treating every positive match the same
+    // way: saying "you've rated cozy books highly before" to someone who
+    // took the quiz and has never rated a single book isn't just vague,
+    // it's false. Each half only gets a sentence if it actually has
+    // matches, so a quiz-only user (the common day-one case) gets a
+    // quiz-framed reason instead of a silently-wrong rating-framed one.
+    const fromQuiz = positiveMatches.filter((m) => m.fromQuiz)
+    const fromRatings = positiveMatches.filter((m) => !m.fromQuiz)
+
+    if (fromQuiz.length > 0) {
+      reasons.push(`You said you like ${joinLabels(fromQuiz.map((m) => formatTagLabel(m.tag)))}.`)
+    }
+    if (fromRatings.length > 0) {
+      reasons.push(
+        `You've rated ${joinLabels(fromRatings.map((m) => formatTagLabel(m.tag)))} highly before.`,
+      )
+    }
   }
 
   for (const signal of scored.circleSignals) {
     if (signal.stars < 4) continue
     if (signal.overlap > 0) {
       reasons.push(
-        `${signal.memberName} rated this ${signal.stars}★ — you two agree on ${Math.round(signal.overlap * 100)}% of books you've both read.`,
+        `${signal.memberName} rated this ${signal.stars}★. You two agree on ${Math.round(signal.overlap * 100)}% of books you've both read.`,
       )
     } else {
       reasons.push(`${signal.memberName} in your circle rated this ${signal.stars}★.`)
@@ -109,7 +135,9 @@ export function explainScore(scored: ScoredBook): string[] {
   }
 
   if (reasons.length === 0) {
-    reasons.push("We don't have a specific reason yet — rate a few more books to improve this.")
+    reasons.push(
+      "We don't have a specific reason yet. Rate a few books or take the taste quiz to help us explain picks better.",
+    )
   }
 
   return reasons
