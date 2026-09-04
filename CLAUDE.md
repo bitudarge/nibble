@@ -181,9 +181,10 @@ Decisions already made when starting Section 1:
   Shelves, Circles, Recs (= Recommendations), You (= Wrap). Recommendations
   keeps its own tab rather than living only inside Home, unlike the mockup's
   five-tab bar.
-- Logo is a plain text wordmark (`src/components/brand/Logo.tsx`) for now,
-  not the mockup's bookworm icon, since the owner is designing their own
-  logo separately.
+- Logo was a plain text wordmark for now at first, since the owner was
+  designing their own logo separately — superseded in round 2 section 1
+  below, `src/components/brand/Logo.tsx` now renders the owner's real
+  mascot/wordmark art.
 
 ### Getting a Google Books API key (optional, Section 3+)
 
@@ -208,3 +209,108 @@ no AI-slop phrasing, emoji only where it clearly fits and the owner approves.
 Design tokens live in `src/index.css` (`@theme` block + `--nibbles-*` CSS
 variables, light and dark) — change colors there, not by hand-picking hex
 values in components.
+
+## Round 2 (all sections merged, 2026-09-03 to 2026-09-04)
+
+A second, larger informal round of owner requests, organized into a plan at
+`docs/round2/master-plan.md`, same reason `docs/refinement/master-prompt.md`
+exists, read it before touching round 2 code. Everything here replaced or
+built on round 1's foundation, not a separate design system.
+
+1. Real mascot/wordmark art (replacing the plain text logo), a new
+   green+white palette (replacing the cream/honey one — sampled from the
+   mascot's own colors, `--nibbles-honey-*` tokens kept their names but now
+   resolve to green, not yellow, so no call-site changes were needed), a
+   hand-drawn custom icon set (magnifying glass for Discover, book stack
+   for Shelves, an open-book-with-heart for Recs replacing a sparkle that
+   read as generic AI iconography), a desktop hamburger menu replacing the
+   persistent sidebar, and PWA support (`vite-plugin-pwa`, installable,
+   precached shell). PR #22.
+2. Rating/review restructure: tagging (mood/pace/genre) now happens once,
+   at rating time, not duplicated in every review editor. "Write a Review"
+   is a secondary, reveal-on-click action instead of sitting open next to
+   the shelf/rating area. New `/my-books` page: a user's own ratings/tags/
+   notes only, never other people's reviews. PR #23.
+3. Comments on reviews. New `review_comments` table
+   (`20260904000001_review_comments.sql`), RLS mirrors the parent review's
+   visibility. PR #24. Found and fixed a real bug right after merging:
+   `profiles` was only ever visible to the owner or a fellow circle
+   member, so a comment from someone outside the viewer's circles on a
+   _public_ review came back with a null profile join, which the UI
+   dereferenced with no guard — would have thrown in the console the first
+   time two non-circle-mates interacted on a public review's comments.
+   Fixed with a narrowly-scoped policy, "a profile is visible if that
+   person commented on a review you can see"
+   (`20260904000002_profiles_visible_via_comments.sql`), not a general
+   profiles-are-public change. PR #25.
+4. Editable profile (display name, avatar URL, no Storage bucket set up
+   yet so it's a plain URL field). `AuthProvider` now loads the profile
+   alongside the session and exposes `refreshProfile()`; every read site
+   that used to read the name/avatar straight off the Google OAuth session
+   (`AppShell`, `Home`, `Wrap`, `BookPage`/comments) now prefers the
+   editable profile via `resolveDisplayIdentity`, falling back to Google
+   metadata, then email, then "Reader". PR #29.
+5. Monthly and weekly reading goals alongside the existing yearly one
+   (additive schema, `20260904000003_monthly_weekly_goals.sql`, the
+   original `year`/`target_books` columns and real existing goal rows were
+   left untouched), all three now genuinely editable (the yearly one could
+   previously only ever be set once). A "record your streak" / "I read
+   today" button for days you don't want to log an exact page. PR #27.
+6. Shelves polish: the plain "Loading…" text replaced with the mascot,
+   inline page-progress logging directly from the shelf grid (reuses the
+   same `window.prompt()` pattern the Dashboard's "Currently reading"
+   strip already used, for consistency rather than introducing a second
+   distinct interaction for the same need). PR #26.
+7. Recommender: found and fixed a real explainability bug while tuning
+   this — `explainScore` always said "you've rated X highly before" for
+   any positive tag match, which is false for a quiz-only, zero-rating
+   user (the exact day-one case round 1 section 7 was built for). Now
+   splits into an honest "you said you like X" (quiz) vs "you've rated X
+   highly before" (ratings) sentence depending on where the signal
+   actually came from. The true cold-start fallback in Recommendations now
+   shows the book's own Google Books synopsis/genre chips instead of just
+   a title and an apology, so a low-confidence pick still gives something
+   concrete to judge it by. PR #28.
+
+Also during round 2: registered **https://readnibbles.vercel.app** as the
+new primary domain (real Vercel project domain, not just an alias) and
+removed `nibble-jade.vercel.app` and `nibbles-app.vercel.app`. This briefly
+broke Google sign-in, Supabase's OAuth redirect allow-list still only had
+`nibble-jade.vercel.app` on it, so removing that domain sent every sign-in
+attempt to a now-404'd URL. Fixed by restoring `nibble-jade.vercel.app` as
+a live domain again (both it and `readnibbles.vercel.app` now work); the
+Supabase-side redirect config still needs updating to add
+`readnibbles.vercel.app` properly so `nibble-jade.vercel.app` can be
+retired for real. Blocked on extracting the Supabase Management API
+personal access token from this machine's macOS Keychain, which requires
+a one-time interactive approval prompt this environment can't click
+through. To finish this: run
+`security find-generic-password -s "Supabase CLI" -a supabase -w` in a
+real terminal on this machine once and approve the Keychain prompt, then
+update Supabase's auth redirect config (via `supabase config push` or the
+Management API directly) to add `readnibbles.vercel.app` to the allowed
+redirect URLs and site URL, then `nibble-jade.vercel.app` can be removed
+as a Vercel domain again.
+
+**Verification pattern correction, important for any future RLS work**:
+`supabase db query --linked` connects as the `postgres` superuser, which
+bypasses RLS entirely regardless of `request.jwt.claims`. Setting
+`set local request.jwt.claims = '...'` alone changes what
+`auth.uid()`/`auth.role()` _return_ but enforces nothing against a
+superuser connection. A valid test needs **both**
+`set local role authenticated;` _and_ `set local request.jwt.claims = '...'`
+in the same query. This is how the comments profile-visibility bug above
+was actually caught, an earlier claims-only test on that same policy
+pattern gave a false pass.
+
+**Still not clicked through by the owner with a real signed-in account.**
+Same gap as round 1, `RequireAuth` needs a real Google OAuth session this
+environment can't produce. Every PR's testing was lint/typecheck/format/
+test/build plus targeted unit tests and, for schema changes, direct
+database verification with two real accounts (not through the UI). Two
+real bugs were still found and fixed this round despite that (the comments
+profile-visibility gap, the explainer's false "you've rated X" claim), so
+treat round 2 as UI-unverified the same way, especially: the profile edit
+form's actual save/refresh flow, the "record your streak" button with a
+real reading session, and the new hamburger menu on a real desktop
+browser.
