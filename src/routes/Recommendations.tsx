@@ -4,8 +4,50 @@ import { BookCover } from '../components/book/BookCover'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecommendations, type Recommendation } from '../lib/recommender'
 import { setShelfStatus } from '../lib/shelf/data'
+import type { Book } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded'
+
+const FALLBACK_CATEGORIES_SHOWN = 3
+
+/**
+ * The book's own Google Books synopsis/genres (same fields BookHero.tsx
+ * shows on the Book Page, enriched onto every book once via
+ * src/lib/books/data.ts's enrichBook), shown only on the true-cold-start
+ * fallback recommendations, which have no real personalization "why" to
+ * offer instead.
+ */
+function FallbackBookInfo({ book }: { book: Book }) {
+  const description =
+    typeof book.metadata.description === 'string' ? book.metadata.description : null
+  const categories = Array.isArray(book.metadata.categories)
+    ? book.metadata.categories.filter((c): c is string => typeof c === 'string')
+    : []
+
+  if (!description && categories.length === 0) return null
+
+  return (
+    <div className="mt-2 border-t border-line pt-2">
+      {categories.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
+          {categories.slice(0, FALLBACK_CATEGORIES_SHOWN).map((category) => (
+            <span
+              key={category}
+              className="rounded-full bg-leaf px-2.5 py-0.5 font-sans text-[11px] font-bold text-on-leaf"
+            >
+              {category}
+            </span>
+          ))}
+        </div>
+      )}
+      {description && (
+        <p className="line-clamp-3 font-sans text-[13px] leading-relaxed text-muted">
+          {description}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export function Recommendations() {
   const { user } = useAuth()
@@ -115,6 +157,12 @@ export function Recommendations() {
                         </li>
                       ))}
                     </ul>
+
+                    {/* The fallback case has no real "why", so lean on the
+                        book's own Google Books data instead, so a
+                        low-confidence pick still gives something concrete
+                        to judge it by rather than just a title. */}
+                    {rec.isFallback && <FallbackBookInfo book={rec.book} />}
                   </div>
                 </div>
                 <button

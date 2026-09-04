@@ -6,10 +6,15 @@ import { CirclesIcon, RecsIcon } from '../components/layout/navIcons'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
 import {
+  countBooksFinishedInPeriod,
   countBooksFinishedInYear,
+  getGoalForPeriod,
   getGoalForYear,
+  getIsoWeekPeriodKey,
+  getMonthPeriodKey,
   getStreak,
   isStreakMilestone,
+  setGoalForPeriod,
   setGoalForYear,
 } from '../lib/goals/data'
 import { resolveDisplayIdentity } from '../lib/profile/identity'
@@ -22,6 +27,133 @@ type LoadState = 'loading' | 'error' | 'loaded'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const STREAK_DOTS = 7
+// Computed once per module load, not per render — the "current" month/week
+// genuinely only changes at a real calendar boundary, no need to
+// recompute it on every re-render.
+const MONTH_KEY = getMonthPeriodKey(new Date())
+const WEEK_KEY = getIsoWeekPeriodKey(new Date())
+
+/**
+ * One goal card: streak-style display when a target's set, an inline
+ * "set/edit" form otherwise. Shared by the yearly/monthly/weekly goals so
+ * "editable, always, not just on first set" (a real gap in the old
+ * yearly-only version, which only ever showed the input before a goal
+ * existed) only needs to be right in one place.
+ */
+function GoalCard({
+  label,
+  bgClass,
+  textClass,
+  current,
+  goal,
+  onSave,
+}: {
+  label: string
+  bgClass: string
+  textClass: string
+  current: number
+  goal: ReadingGoal | null
+  onSave: (target: number) => Promise<void>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [input, setInput] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSave() {
+    const target = Number(input)
+    if (!Number.isFinite(target) || target <= 0) {
+      setError('Enter a positive number of books.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await onSave(Math.round(target))
+      setEditing(false)
+      setInput('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save that goal.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const showForm = editing || !goal
+  const pct = goal ? Math.min(100, Math.round((current / goal.target_books) * 100)) : 0
+
+  return (
+    <div className={`rounded-[22px] ${bgClass} p-4 shadow-soft`}>
+      <div
+        className={`mb-1.5 flex items-center justify-between font-sans text-[11.5px] font-bold tracking-wide ${textClass} uppercase`}
+      >
+        <span>{label}</span>
+        {goal && !editing && (
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(true)
+              setInput(String(goal.target_books))
+            }}
+            className={`normal-case ${textClass} opacity-70 transition-opacity active:opacity-40`}
+          >
+            Edit
+          </button>
+        )}
+      </div>
+
+      {showForm ? (
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="e.g. 4"
+            className="w-16 rounded-full border border-line bg-surface px-3 py-1.5 font-sans text-sm text-ink"
+            aria-label={`${label} target`}
+          />
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={!input.trim() || saving}
+            className="rounded-full bg-sage px-3.5 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : goal ? 'Update' : 'Set goal'}
+          </button>
+          {editing && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false)
+                setError(null)
+              }}
+              className={`font-sans text-xs font-bold ${textClass} opacity-70`}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className={`font-sans text-3xl font-extrabold ${textClass}`}>
+            {current}/{goal.target_books}
+          </div>
+          <div className={`mt-0.5 font-sans text-[12.5px] font-semibold ${textClass} opacity-80`}>
+            books finished
+          </div>
+          <div className="mt-2.5 h-[9px] overflow-hidden rounded-full bg-black/10">
+            <div
+              className="h-full rounded-full bg-sage transition-[width] duration-500 ease-out"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </>
+      )}
+      {error && <p className={`mt-1.5 font-sans text-xs ${textClass}`}>{error}</p>}
+    </div>
+  )
+}
 
 function OpenBookIcon() {
   return (
@@ -58,12 +190,15 @@ export function Home() {
 
   const [currentlyReading, setCurrentlyReading] = useState<ShelfItemWithBook[]>([])
   const [finishedThisYear, setFinishedThisYear] = useState(0)
+  const [finishedThisMonth, setFinishedThisMonth] = useState(0)
+  const [finishedThisWeek, setFinishedThisWeek] = useState(0)
   const [goal, setGoal] = useState<ReadingGoal | null>(null)
+  const [monthGoal, setMonthGoal] = useState<ReadingGoal | null>(null)
+  const [weekGoal, setWeekGoal] = useState<ReadingGoal | null>(null)
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
-  const [goalInput, setGoalInput] = useState('')
-  const [savingGoal, setSavingGoal] = useState(false)
+  const [recordingStreak, setRecordingStreak] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -75,9 +210,23 @@ export function Home() {
         const shelfItems = await getShelfItemsWithBooks(user.id)
         const reading = shelfItems.filter((item) => item.status === 'reading')
 
-        const [finishedCount, yearGoal, readingStreak, recs, activity] = await Promise.all([
+        const [
+          finishedCount,
+          finishedMonthCount,
+          finishedWeekCount,
+          yearGoal,
+          monthGoalRow,
+          weekGoalRow,
+          readingStreak,
+          recs,
+          activity,
+        ] = await Promise.all([
           countBooksFinishedInYear(user.id, CURRENT_YEAR),
+          countBooksFinishedInPeriod(user.id, 'month', MONTH_KEY),
+          countBooksFinishedInPeriod(user.id, 'week', WEEK_KEY),
           getGoalForYear(user.id, CURRENT_YEAR),
+          getGoalForPeriod(user.id, 'month', MONTH_KEY),
+          getGoalForPeriod(user.id, 'week', WEEK_KEY),
           getStreak(user.id),
           getRecommendations(user.id, 5),
           getRecentCircleActivity(user.id),
@@ -86,7 +235,11 @@ export function Home() {
         if (cancelled) return
         setCurrentlyReading(reading)
         setFinishedThisYear(finishedCount)
+        setFinishedThisMonth(finishedMonthCount)
+        setFinishedThisWeek(finishedWeekCount)
         setGoal(yearGoal)
+        setMonthGoal(monthGoalRow)
+        setWeekGoal(weekGoalRow)
         setStreak(readingStreak)
         setRecommendations(recs)
         setCircleActivity(activity)
@@ -140,22 +293,32 @@ export function Home() {
     }
   }
 
-  async function handleSetGoal() {
-    if (!user) return
-    const target = Number(goalInput)
-    if (!Number.isFinite(target) || target <= 0) {
-      setError('Enter a positive number of books.')
-      return
-    }
-    setSavingGoal(true)
+  // "Record your streak": a lighter alternative to logging a specific
+  // page, for days you read but don't want to note exactly where you
+  // stopped. Logs a zero-page session (fromPage === toPage) against
+  // whichever book is currently being read, which is enough for the
+  // server-side streak trigger to count today, without touching the
+  // book's actual progress.
+  async function recordStreakToday() {
+    if (!user || currentlyReading.length === 0) return
+    const item = currentlyReading[0]
+    if (!item) return
+    const streakBefore = streak?.current_streak ?? 0
+    setRecordingStreak(true)
+    setError(null)
     try {
-      const updated = await setGoalForYear(user.id, CURRENT_YEAR, Math.round(target))
-      setGoal(updated)
-      setGoalInput('')
+      const page = item.current_page ?? 0
+      await logReadingProgress(user.id, item.book_id, page, page, item.books.page_count)
+      const streakAfter = await getStreak(user.id)
+      setStreak(streakAfter)
+      const after = streakAfter?.current_streak ?? 0
+      if (isStreakMilestone(streakBefore, after)) {
+        celebrate(`${after} days in a row. Keep it warm.`)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save your goal.')
+      setError(err instanceof Error ? err.message : 'Could not record today. Try again.')
     } finally {
-      setSavingGoal(false)
+      setRecordingStreak(false)
     }
   }
 
@@ -172,7 +335,6 @@ export function Home() {
   }
 
   const currentStreak = streak?.current_streak ?? 0
-  const goalPct = goal ? Math.min(100, Math.round((finishedThisYear / goal.target_books) * 100)) : 0
   const { displayName } = resolveDisplayIdentity(user, profile)
   const firstName = displayName.split(' ')[0] || 'there'
 
@@ -221,49 +383,60 @@ export function Home() {
               />
             ))}
           </div>
-        </div>
-
-        <div className="rounded-[22px] bg-leaf p-4 shadow-soft">
-          <div className="mb-1.5 font-sans text-[11.5px] font-bold tracking-wide text-on-leaf uppercase">
-            {CURRENT_YEAR} goal
-          </div>
-          {goal ? (
-            <>
-              <div className="font-sans text-3xl font-extrabold text-on-leaf">
-                {finishedThisYear}/{goal.target_books}
-              </div>
-              <div className="mt-0.5 font-sans text-[12.5px] font-semibold text-on-leaf opacity-80">
-                books finished
-              </div>
-              <div className="mt-2.5 h-[9px] overflow-hidden rounded-full bg-black/10">
-                <div
-                  className="h-full rounded-full bg-sage transition-[width] duration-500 ease-out"
-                  style={{ width: `${goalPct}%` }}
-                />
-              </div>
-            </>
+          {currentlyReading.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void recordStreakToday()}
+              disabled={recordingStreak}
+              className="mt-3 w-full rounded-full bg-honey px-3.5 py-1.5 font-sans text-xs font-bold text-surface transition-transform active:scale-95 disabled:opacity-50"
+            >
+              {recordingStreak ? 'Recording…' : 'I read today'}
+            </button>
           ) : (
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                value={goalInput}
-                onChange={(e) => setGoalInput(e.target.value)}
-                placeholder="e.g. 20"
-                className="w-20 rounded-full border border-line bg-surface px-3 py-1.5 font-sans text-sm text-ink"
-                aria-label="Books to read this year"
-              />
-              <button
-                type="button"
-                onClick={() => void handleSetGoal()}
-                disabled={!goalInput.trim() || savingGoal}
-                className="rounded-full bg-sage px-3.5 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95 disabled:opacity-50"
-              >
-                {savingGoal ? 'Saving…' : 'Set goal'}
-              </button>
-            </div>
+            <p className="mt-3 font-sans text-[11px] text-honey-text opacity-70">
+              Start a book to record a streak day.
+            </p>
           )}
         </div>
+
+        <GoalCard
+          label={`${CURRENT_YEAR} goal`}
+          bgClass="bg-leaf"
+          textClass="text-on-leaf"
+          current={finishedThisYear}
+          goal={goal}
+          onSave={async (target) => {
+            if (!user) return
+            const updated = await setGoalForYear(user.id, CURRENT_YEAR, target)
+            setGoal(updated)
+          }}
+        />
+
+        <GoalCard
+          label="This month"
+          bgClass="bg-tint"
+          textClass="text-ink"
+          current={finishedThisMonth}
+          goal={monthGoal}
+          onSave={async (target) => {
+            if (!user) return
+            const updated = await setGoalForPeriod(user.id, 'month', MONTH_KEY, target)
+            setMonthGoal(updated)
+          }}
+        />
+
+        <GoalCard
+          label="This week"
+          bgClass="bg-surface"
+          textClass="text-ink"
+          current={finishedThisWeek}
+          goal={weekGoal}
+          onSave={async (target) => {
+            if (!user) return
+            const updated = await setGoalForPeriod(user.id, 'week', WEEK_KEY, target)
+            setWeekGoal(updated)
+          }}
+        />
       </section>
 
       <section>
