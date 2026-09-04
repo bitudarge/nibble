@@ -12,6 +12,7 @@ import {
   isStreakMilestone,
   setGoalForYear,
 } from '../lib/goals/data'
+import { resolveDisplayIdentity } from '../lib/profile/identity'
 import { getRecommendations, type Recommendation } from '../lib/recommender'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemsWithBooks, type ShelfItemWithBook } from '../lib/shelf/data'
@@ -50,7 +51,7 @@ function greeting(): string {
 }
 
 export function Home() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { celebrate, node: celebrationNode } = useCelebration()
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -172,9 +173,8 @@ export function Home() {
 
   const currentStreak = streak?.current_streak ?? 0
   const goalPct = goal ? Math.min(100, Math.round((finishedThisYear / goal.target_books) * 100)) : 0
-  const rawName = user?.user_metadata?.full_name
-  const firstName =
-    typeof rawName === 'string' && rawName ? rawName.split(' ')[0] : (user?.email ?? 'there')
+  const { displayName } = resolveDisplayIdentity(user, profile)
+  const firstName = displayName.split(' ')[0] || 'there'
 
   return (
     <div
