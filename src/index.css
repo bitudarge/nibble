@@ -103,6 +103,55 @@ body {
   color-scheme: dark;
 }
 
+/* The thumb for ProgressControl's range-input progress bar (the track's
+   fill color comes from an inline gradient set in the component itself,
+   since it depends on the current percent; only the draggable handle's
+   look lives here, native range-input thumbs can't be styled with plain
+   Tailwind utilities). A round handle in the app's surface color with a
+   sage ring, matching the rest of the app's soft, rounded controls. */
+.progress-slider {
+  appearance: none;
+  -webkit-appearance: none;
+}
+.progress-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--nibbles-surface);
+  border: 3px solid var(--nibbles-sage);
+  box-shadow: 0 2px 6px var(--nibbles-shadow);
+}
+.progress-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--nibbles-surface);
+  border: 3px solid var(--nibbles-sage);
+  box-shadow: 0 2px 6px var(--nibbles-shadow);
+  box-sizing: border-box;
+}
+.progress-slider::-moz-range-track {
+  background: transparent;
+}
+
+/* A quick, satisfying bounce for the streak "mark today" button, more
+   presence than the plain active:scale-95 press feedback used elsewhere,
+   since this one moment is meant to feel like a small celebration of its
+   own, not just an acknowledged tap. */
+@keyframes nib-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* A gentle fade-up used when a page/section first appears. */
 @keyframes nib-in {
   from {
