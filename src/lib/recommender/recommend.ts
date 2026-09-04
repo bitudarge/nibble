@@ -17,6 +17,14 @@ export interface Recommendation {
   book: Book
   score: number
   why: string[]
+  /**
+   * True for the true-cold-start fallback (recently-added books, no real
+   * personalization reason yet). Recommendations.tsx uses this to show the
+   * book's own Google Books synopsis/genres instead of a scored "why" list,
+   * so a low-confidence pick still gives the reader something concrete to
+   * judge it by rather than just a title and an apology.
+   */
+  isFallback?: boolean
 }
 
 /**
@@ -54,6 +62,7 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
       why: [
         `Rate ${remaining} more book${remaining === 1 ? '' : 's'} to personalize this, or take the taste quiz for a head start. Showing recently added books for now.`,
       ],
+      isFallback: true,
     }))
   }
 
