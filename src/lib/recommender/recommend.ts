@@ -3,6 +3,7 @@ import { getShelfItems } from '../shelf/data'
 import type { Book } from '../../types/database'
 import { getBookTagProfiles } from './bookTagProfile'
 import { getCircleSignals } from './circleSignals'
+import { discoverBooksForGenres } from './discovery'
 import { explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
 import type { TasteProfileData } from './types'
@@ -43,6 +44,20 @@ export function needsFallback(tasteProfile: TasteProfileData): boolean {
 }
 
 /**
+ * The genres a taste profile likes best, most-affinity-first, as bare
+ * genre names ("fantasy", not "genre:fantasy"). Feeds `discovery.ts`'s
+ * external Open Library search — pure and testable without a database,
+ * same reasoning as `needsFallback` above.
+ */
+export function topGenreAffinities(tagAffinity: Record<string, number>, limit = 3): string[] {
+  return Object.entries(tagAffinity)
+    .filter(([tag, value]) => tag.startsWith('genre:') && value > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([tag]) => tag.slice('genre:'.length))
+}
+
+/**
  * The recommender's one public entry point for "what should I read next".
  * Degrades gracefully: with no ratings and no quiz signal, falls back to
  * recently-added books with an honest label rather than a fake "why".
@@ -67,6 +82,25 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
   }
 
   const candidates = await getRecentlyAddedBooks(shelvedBookIds, CANDIDATE_POOL_SIZE)
+
+  // Widen the pool past whatever's already in the catalog: search Open
+  // Library for the genres this taste profile likes best (quiz-seeded or
+  // rating-derived, topGenreAffinities doesn't care which) and pull in
+  // books nobody's added yet. See discovery.ts for why this is bounded and
+  // best-effort — a flaky external API should never take down the whole
+  // recommendations page.
+  const topGenres = topGenreAffinities(tasteProfile.tagAffinity)
+  if (topGenres.length > 0) {
+    try {
+      const excludeIds = new Set([...shelvedBookIds, ...candidates.map((book) => book.id)])
+      const discovered = await discoverBooksForGenres(topGenres, excludeIds)
+      candidates.push(...discovered)
+    } catch {
+      // Discovery is a bonus signal on top of the existing catalog, not a
+      // hard dependency, fall through with whatever candidates exist.
+    }
+  }
+
   if (candidates.length === 0) return []
 
   const candidateIds = candidates.map((book) => book.id)
