@@ -16,11 +16,11 @@ import { TagPicker } from './TagPicker'
  *
  * `showTagPicker` defaults to true, but BookPage passes `false` for the
  * public and circle instances: tagging now happens once, at rating time
- * (see QuickNoteNudge), not repeated in every review. Only the private
- * note's editor still shows/edits tags, for touching them up after the
- * fact outside the rating flow. When it's false, this component doesn't
- * touch a review's tags at all on save, rather than overwriting them with
- * a frozen copy of whatever was passed in.
+ * (see FirstRatingExperience), not repeated in every review. Only the
+ * private note's editor still shows/edits tags, for touching them up
+ * after the fact outside the rating flow. When it's false, this component
+ * doesn't touch a review's tags at all on save, rather than overwriting
+ * them with a frozen copy of whatever was passed in.
  */
 export function ReviewEditor({
   bookId,
