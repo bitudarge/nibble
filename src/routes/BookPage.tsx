@@ -27,7 +27,7 @@ import {
 } from '../lib/reviews/data'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemForBook, setShelfStatus } from '../lib/shelf/data'
-import { getAllTags, getTagsForReview } from '../lib/tags/data'
+import { getAllTags, getTagsForReview, setReviewTags } from '../lib/tags/data'
 import type { Book, BookTag, Circle, Review, ShelfItem, ShelfStatus } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded' | 'not-found'
@@ -66,6 +66,12 @@ export function BookPage() {
   const [showQuickNote, setShowQuickNote] = useState(false)
   const [quickNoteSaving, setQuickNoteSaving] = useState(false)
   const [quickNoteError, setQuickNoteError] = useState<string | null>(null)
+
+  // "Write a Review" is a secondary, opt-in action now, not an editor
+  // sitting open next to the shelf/rating area by default (see round 2's
+  // rating/review restructure). Once opened for this page visit it stays
+  // open, saving doesn't collapse it back.
+  const [showReviewComposer, setShowReviewComposer] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -195,7 +201,7 @@ export function BookPage() {
     }
   }
 
-  async function handleQuickNoteSave(text: string) {
+  async function handleQuickNoteSave(text: string, tagIds: string[]) {
     if (!user || !bookId) return
     setQuickNoteSaving(true)
     setQuickNoteError(null)
@@ -204,7 +210,9 @@ export function BookPage() {
         { bookId, userId: user.id, body: text, containsSpoilers: false, visibility: 'private' },
         null,
       )
+      await setReviewTags(review.id, tagIds)
       setPrivateReview(review)
+      setPrivateTagIds(tagIds)
       setShowQuickNote(false)
     } catch (err) {
       setQuickNoteError(err instanceof Error ? err.message : 'Could not save that note. Try again.')
@@ -309,7 +317,8 @@ export function BookPage() {
 
       {showQuickNote && (
         <QuickNoteNudge
-          onSave={(text) => void handleQuickNoteSave(text)}
+          allTags={allTags}
+          onSave={(text, tagIds) => void handleQuickNoteSave(text, tagIds)}
           onSkip={handleQuickNoteSkip}
           saving={quickNoteSaving}
           error={quickNoteError}
@@ -322,6 +331,10 @@ export function BookPage() {
         </p>
       )}
 
+      {/* Shelf status, progress, and My Notes are grouped together: this is
+          the "my shelf entry for this book" part of the page. Reviewing
+          (public or circle) is a clearly separate, secondary action below,
+          see round 2's rating/review restructure. */}
       <section className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-soft">
         <label className="flex items-center gap-2 font-sans text-sm text-ink">
           Shelf
@@ -368,6 +381,12 @@ export function BookPage() {
             Just for you. Never public unless you share it to a circle.
           </p>
           <ReviewEditor
+            // Remounts fresh whenever the private review's identity changes
+            // (null -> a real row, e.g. right after QuickNoteNudge saves
+            // one), otherwise this editor's internal body/tag state would
+            // stay frozen at whatever it had on first mount and silently
+            // not show the note that was just saved.
+            key={privateReview?.id ?? 'private-new'}
             bookId={book.id}
             userId={user.id}
             visibility="private"
@@ -385,24 +404,41 @@ export function BookPage() {
       )}
 
       <section className="mb-6 rounded-2xl bg-surface p-4 shadow-soft">
-        <h2 className="mb-1 font-display text-lg font-semibold text-ink">Write a Review</h2>
-        <p className="mb-3 font-sans text-xs text-muted">Optional, and public once you save it.</p>
-        {user && (
-          <ReviewEditor
-            bookId={book.id}
-            userId={user.id}
-            visibility="public"
-            existingReview={publicReview}
-            existingTagIds={publicTagIds}
-            allTags={allTags}
-            shareTargets={myCircles}
-            onShare={(circleId, body) => handleShareToCircle(circleId, body)}
-            onSaved={(review, tagIds) => {
-              setPublicReview(review)
-              setPublicTagIds(tagIds)
-              setPublicReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)])
-            }}
-          />
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">Write a Review</h2>
+            <p className="font-sans text-xs text-muted">Optional, and public once you save it.</p>
+          </div>
+          {!showReviewComposer && (
+            <button
+              type="button"
+              onClick={() => setShowReviewComposer(true)}
+              className="flex-none rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink transition-transform active:scale-95"
+            >
+              {publicReview ? 'Edit review' : 'Write a review'}
+            </button>
+          )}
+        </div>
+
+        {showReviewComposer && user && (
+          <div className="mt-3">
+            <ReviewEditor
+              bookId={book.id}
+              userId={user.id}
+              visibility="public"
+              existingReview={publicReview}
+              existingTagIds={publicTagIds}
+              allTags={allTags}
+              showTagPicker={false}
+              shareTargets={myCircles}
+              onShare={(circleId, body) => handleShareToCircle(circleId, body)}
+              onSaved={(review, tagIds) => {
+                setPublicReview(review)
+                setPublicTagIds(tagIds)
+                setPublicReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)])
+              }}
+            />
+          </div>
         )}
 
         <div className="mt-4 border-t border-line pt-4">
@@ -476,6 +512,7 @@ export function BookPage() {
                     existingReview={circleReview}
                     existingTagIds={circleTagIds}
                     allTags={allTags}
+                    showTagPicker={false}
                     onSaved={(review, tagIds) => {
                       setCircleReview(review)
                       setCircleTagIds(tagIds)
