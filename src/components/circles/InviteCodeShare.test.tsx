@@ -36,7 +36,8 @@ describe('InviteCodeShare', () => {
     render(<InviteCodeShare circleName="Sunday Sofa" joinCode="ABC123" />)
     expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument()
 
-    // @ts-expect-error — stubbing a browser API jsdom doesn't implement.
+    // navigator.share is typed as optional on Navigator already (DOM lib),
+    // no suppression needed to assign a stub for it, unlike deleting it above.
     navigator.share = vi.fn().mockResolvedValue(undefined)
     render(<InviteCodeShare circleName="Sunday Sofa" joinCode="ABC123" />)
     expect(screen.getByRole('button', { name: 'Share' })).toBeInTheDocument()
