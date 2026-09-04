@@ -54,5 +54,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
+    // .claude/worktrees holds temporary git worktrees for background
+    // agents (nested copies of this repo) — without this, running tests
+    // locally while any are active picks up their test files too,
+    // duplicating and inflating the count.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
   },
 })

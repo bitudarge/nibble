@@ -75,10 +75,17 @@ export interface ReadingSession {
   created_at: string
 }
 
+/**
+ * A row is either a legacy yearly goal (`year` set, `period`/`period_key`
+ * null) or a monthly/weekly goal (`period`+`period_key` set, `year` null),
+ * never both — see the migration that added the period columns for why.
+ */
 export interface ReadingGoal {
   id: string
   user_id: string
-  year: number
+  year: number | null
+  period: 'month' | 'week' | null
+  period_key: string | null
   target_books: number
   created_at: string
 }
