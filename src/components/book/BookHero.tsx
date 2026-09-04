@@ -40,7 +40,7 @@ export function BookHero({
         <div
           className="flex h-64 w-44 flex-none items-center justify-center self-center rounded-[20px] text-center font-sans text-xs text-muted shadow-lift sm:self-start"
           style={{
-            background: 'repeating-linear-gradient(135deg, #E9E0CC 0 9px, #F3EBD9 9px 18px)',
+            background: 'repeating-linear-gradient(135deg, #DCE8D3 0 9px, #F6FAF3 9px 18px)',
           }}
         >
           No cover yet

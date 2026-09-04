@@ -32,7 +32,7 @@ export function Login() {
       style={{ animation: 'nib-in 0.3s ease both' }}
     >
       <h1>
-        <Logo className="text-3xl" />
+        <Logo variant="full" className="h-16" />
       </h1>
       <p className="font-sans text-muted">Track what you read, with friends.</p>
 

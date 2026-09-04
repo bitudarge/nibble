@@ -22,7 +22,7 @@ export function BookCover({
     <div
       className={`flex items-center justify-center rounded-2xl p-2 text-center font-sans text-xs text-muted shadow-soft ${className}`}
       style={{
-        background: 'repeating-linear-gradient(135deg, #E9E0CC 0 7px, #F3EBD9 7px 14px)',
+        background: 'repeating-linear-gradient(135deg, #DCE8D3 0 7px, #F6FAF3 7px 14px)',
       }}
     >
       {title}
