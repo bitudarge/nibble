@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
+import { ProgressControl } from '../components/book/ProgressControl'
 import { Logo } from '../components/brand/Logo'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { useAuth } from '../lib/auth/useAuth'
@@ -120,6 +121,7 @@ export function Shelves() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not log your progress.')
+      throw err // ProgressControl needs this to know the save failed and roll back its own display.
     }
   }
 
@@ -176,14 +178,10 @@ export function Shelves() {
 
       {shelfItems.length === 0 ? (
         <div className="rounded-3xl bg-tint px-5 py-8 text-center">
-          <svg
-            width="60"
-            height="60"
-            viewBox="0 0 96 96"
-            aria-hidden
-            className="mx-auto"
-            style={{ animation: 'nib-wig 2.6s ease-in-out infinite', transformOrigin: '50% 80%' }}
-          >
+          {/* Static now (was an animated wiggle) — the owner found the
+              constant motion on an empty shelf distracting rather than
+              charming. */}
+          <svg width="60" height="60" viewBox="0 0 96 96" aria-hidden className="mx-auto">
             <path
               d="M30 78 C24 48 44 30 62 38"
               fill="none"
@@ -227,28 +225,12 @@ export function Shelves() {
                 {item.books.author}
               </p>
               {item.status === 'reading' && (
-                <div className="mb-2 flex items-center justify-between gap-1.5">
-                  <span className="truncate font-sans text-[11px] font-bold text-muted">
-                    {item.books.page_count
-                      ? `page ${item.current_page ?? 0} of ${item.books.page_count}`
-                      : `page ${item.current_page ?? 0}`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const input = window.prompt(
-                        'What page are you on?',
-                        String(item.current_page ?? ''),
-                      )
-                      const page = Number(input)
-                      if (input && Number.isFinite(page) && page >= 0) {
-                        void quickLogProgress(item, page)
-                      }
-                    }}
-                    className="flex-none rounded-full bg-leaf px-2.5 py-1 font-sans text-[11px] font-bold text-on-leaf transition-transform active:scale-95"
-                  >
-                    Update
-                  </button>
+                <div className="mb-2">
+                  <ProgressControl
+                    currentPage={item.current_page ?? 0}
+                    pageCount={item.books.page_count}
+                    onSave={(page) => quickLogProgress(item, page)}
+                  />
                 </div>
               )}
               <button
