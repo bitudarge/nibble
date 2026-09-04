@@ -178,14 +178,10 @@ export function Shelves() {
 
       {shelfItems.length === 0 ? (
         <div className="rounded-3xl bg-tint px-5 py-8 text-center">
-          <svg
-            width="60"
-            height="60"
-            viewBox="0 0 96 96"
-            aria-hidden
-            className="mx-auto"
-            style={{ animation: 'nib-wig 2.6s ease-in-out infinite', transformOrigin: '50% 80%' }}
-          >
+          {/* Static now (was an animated wiggle) — the owner found the
+              constant motion on an empty shelf distracting rather than
+              charming. */}
+          <svg width="60" height="60" viewBox="0 0 96 96" aria-hidden className="mx-auto">
             <path
               d="M30 78 C24 48 44 30 62 38"
               fill="none"
