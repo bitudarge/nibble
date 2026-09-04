@@ -2,13 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { saveReview } from '../../lib/reviews/data'
 import { setReviewTags } from '../../lib/tags/data'
 import type { BookTag, Circle, Review } from '../../types/database'
-
-const TAG_TYPE_LABELS: Record<string, string> = {
-  mood: 'Mood',
-  pace: 'Pace',
-  spice_level: 'Spice level',
-  genre: 'Genre',
-}
+import { TagPicker } from './TagPicker'
 
 /**
  * One instance of this handles ONE review (private, public, or one specific
@@ -19,6 +13,14 @@ const TAG_TYPE_LABELS: Record<string, string> = {
  * reviews only, see BookPage.tsx), an existing review gets a "share to
  * circle" affordance right here rather than a separate compose flow — it
  * copies this review's body into a circle-visibility review.
+ *
+ * `showTagPicker` defaults to true, but BookPage passes `false` for the
+ * public and circle instances: tagging now happens once, at rating time
+ * (see QuickNoteNudge), not repeated in every review. Only the private
+ * note's editor still shows/edits tags, for touching them up after the
+ * fact outside the rating flow. When it's false, this component doesn't
+ * touch a review's tags at all on save, rather than overwriting them with
+ * a frozen copy of whatever was passed in.
  */
 export function ReviewEditor({
   bookId,
@@ -31,6 +33,7 @@ export function ReviewEditor({
   onSaved,
   shareTargets,
   onShare,
+  showTagPicker = true,
 }: {
   bookId: string
   userId: string
@@ -42,6 +45,7 @@ export function ReviewEditor({
   onSaved: (review: Review, tagIds: string[]) => void
   shareTargets?: Circle[]
   onShare?: (circleId: string, body: string) => Promise<void>
+  showTagPicker?: boolean
 }) {
   const [body, setBody] = useState(existingReview?.body ?? '')
   const [containsSpoilers, setContainsSpoilers] = useState(
@@ -77,8 +81,8 @@ export function ReviewEditor({
         { bookId, userId, body: trimmed, containsSpoilers, visibility, circleId },
         existingReview?.id ?? null,
       )
-      await setReviewTags(review.id, selectedTagIds)
-      onSaved(review, selectedTagIds)
+      if (showTagPicker) await setReviewTags(review.id, selectedTagIds)
+      onSaved(review, showTagPicker ? selectedTagIds : existingTagIds)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save your review.')
     } finally {
@@ -99,11 +103,6 @@ export function ReviewEditor({
     } finally {
       setSharing(false)
     }
-  }
-
-  const tagsByType: Record<string, BookTag[]> = {}
-  for (const tag of allTags) {
-    ;(tagsByType[tag.type] ??= []).push(tag)
   }
 
   return (
@@ -139,30 +138,9 @@ export function ReviewEditor({
         Has spoilers
       </label>
 
-      <div className="flex flex-col gap-2">
-        {Object.entries(tagsByType).map(([type, tags]) => (
-          <div key={type}>
-            <span className="font-sans text-xs font-bold tracking-wide text-muted uppercase">
-              {TAG_TYPE_LABELS[type] ?? type}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {tags.map((tag) => (
-                <button
-                  key={tag.id}
-                  type="button"
-                  onClick={() => toggleTag(tag.id)}
-                  aria-pressed={selectedTagIds.includes(tag.id)}
-                  className={`rounded-full px-2.5 py-1 font-sans text-xs font-bold transition-transform active:scale-95 ${
-                    selectedTagIds.includes(tag.id) ? 'bg-leaf text-on-leaf' : 'bg-tint text-muted'
-                  }`}
-                >
-                  {tag.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      {showTagPicker && (
+        <TagPicker allTags={allTags} selectedTagIds={selectedTagIds} onToggle={toggleTag} />
+      )}
 
       {error && <p className="font-sans text-sm text-honey-text">{error}</p>}
 
