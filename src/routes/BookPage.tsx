@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { BookHero } from '../components/book/BookHero'
-import { QuickNoteNudge } from '../components/book/QuickNoteNudge'
+import { FirstRatingExperience } from '../components/book/FirstRatingExperience'
+import { PrivateNoteSummary } from '../components/book/PrivateNoteSummary'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
 import { useCelebration } from '../components/celebrate/useCelebration'
@@ -64,12 +65,15 @@ export function BookPage() {
   const [progressInput, setProgressInput] = useState('')
   const [progressError, setProgressError] = useState<string | null>(null)
 
-  // The anti-forgetting nudge: shown right after a rating, only while the
-  // user has no private note yet for this book (once they save one, or
-  // already had one, there's nothing to nudge for).
-  const [showQuickNote, setShowQuickNote] = useState(false)
-  const [quickNoteSaving, setQuickNoteSaving] = useState(false)
-  const [quickNoteError, setQuickNoteError] = useState<string | null>(null)
+  // The immersive first-rating flow: shown right after rating, only while
+  // the user has no private note yet for this book (once they save one,
+  // or already had one, there's nothing to prompt for). Once a private
+  // review exists, "My Notes" shows it read-only (see showNoteEditor
+  // below) instead of always leaving the raw edit form open.
+  const [showFirstRatingFlow, setShowFirstRatingFlow] = useState(false)
+  const [firstRatingSaving, setFirstRatingSaving] = useState(false)
+  const [firstRatingError, setFirstRatingError] = useState<string | null>(null)
+  const [showNoteEditor, setShowNoteEditor] = useState(false)
 
   // "Write a Review" is a secondary, opt-in action now, not an editor
   // sitting open next to the shelf/rating area by default (see round 2's
@@ -84,6 +88,16 @@ export function BookPage() {
       if (!bookId || !user) return
       setState('loading')
       setError(null)
+      // The route has no per-book `key`, so navigating from one book's
+      // page straight to another (e.g. via a search result Link) reuses
+      // this same component instance rather than remounting it. Without
+      // resetting these here, leaving Book A's note open for editing and
+      // then navigating to Book B would land on Book B's note already in
+      // edit mode, exactly the "feels like the first time every time"
+      // problem this component exists to avoid.
+      setShowNoteEditor(false)
+      setShowFirstRatingFlow(false)
+      setFirstRatingError(null)
       try {
         const foundBook = await getBookById(bookId)
         if (!foundBook) {
@@ -192,7 +206,7 @@ export function BookPage() {
     if (!user || !bookId) return
     const previous = myRating
     setMyRating(stars)
-    if (!privateReview) setShowQuickNote(true)
+    if (!privateReview) setShowFirstRatingFlow(true)
     try {
       const updated = await setRating(user.id, bookId, stars)
       setMyRating(updated.stars)
@@ -200,15 +214,15 @@ export function BookPage() {
       setAggregate(agg)
     } catch (err) {
       setMyRating(previous)
-      setShowQuickNote(false)
+      setShowFirstRatingFlow(false)
       setError(err instanceof Error ? err.message : 'Could not save your rating. Try again.')
     }
   }
 
-  async function handleQuickNoteSave(text: string, tagIds: string[]) {
+  async function handleFirstRatingSave(text: string, tagIds: string[]) {
     if (!user || !bookId) return
-    setQuickNoteSaving(true)
-    setQuickNoteError(null)
+    setFirstRatingSaving(true)
+    setFirstRatingError(null)
     try {
       const review = await saveReview(
         { bookId, userId: user.id, body: text, containsSpoilers: false, visibility: 'private' },
@@ -217,16 +231,18 @@ export function BookPage() {
       await setReviewTags(review.id, tagIds)
       setPrivateReview(review)
       setPrivateTagIds(tagIds)
-      setShowQuickNote(false)
+      setShowFirstRatingFlow(false)
     } catch (err) {
-      setQuickNoteError(err instanceof Error ? err.message : 'Could not save that note. Try again.')
+      setFirstRatingError(
+        err instanceof Error ? err.message : 'Could not save that note. Try again.',
+      )
     } finally {
-      setQuickNoteSaving(false)
+      setFirstRatingSaving(false)
     }
   }
 
-  function handleQuickNoteSkip() {
-    setShowQuickNote(false)
+  function handleFirstRatingSkip() {
+    setShowFirstRatingFlow(false)
   }
 
   async function handleShareToCircle(circleId: string, body: string) {
@@ -319,13 +335,14 @@ export function BookPage() {
         onRatingChange={(v) => void handleRatingChange(v)}
       />
 
-      {showQuickNote && (
-        <QuickNoteNudge
+      {showFirstRatingFlow && (
+        <FirstRatingExperience
+          bookTitle={book.title}
           allTags={allTags}
-          onSave={(text, tagIds) => void handleQuickNoteSave(text, tagIds)}
-          onSkip={handleQuickNoteSkip}
-          saving={quickNoteSaving}
-          error={quickNoteError}
+          onSave={(text, tagIds) => void handleFirstRatingSave(text, tagIds)}
+          onSkip={handleFirstRatingSkip}
+          saving={firstRatingSaving}
+          error={firstRatingError}
         />
       )}
 
@@ -384,26 +401,44 @@ export function BookPage() {
           <p className="mb-3 font-sans text-xs text-muted">
             Just for you. Never public unless you share it to a circle.
           </p>
-          <ReviewEditor
-            // Remounts fresh whenever the private review's identity changes
-            // (null -> a real row, e.g. right after QuickNoteNudge saves
-            // one), otherwise this editor's internal body/tag state would
-            // stay frozen at whatever it had on first mount and silently
-            // not show the note that was just saved.
-            key={privateReview?.id ?? 'private-new'}
-            bookId={book.id}
-            userId={user.id}
-            visibility="private"
-            existingReview={privateReview}
-            existingTagIds={privateTagIds}
-            allTags={allTags}
-            shareTargets={myCircles}
-            onShare={(circleId, body) => handleShareToCircle(circleId, body)}
-            onSaved={(review, tagIds) => {
-              setPrivateReview(review)
-              setPrivateTagIds(tagIds)
-            }}
-          />
+          {privateReview && !showNoteEditor ? (
+            // Read-only once a note exists, matching "Write a Review"'s
+            // reveal-on-click shape below, tapping Edit reveals the same
+            // form the first-rating flow's save writes into. Avoids
+            // landing on a raw edit form every visit once there's already
+            // something saved, per the owner's "I don't want it to feel
+            // like the first time every time" request.
+            <PrivateNoteSummary
+              review={privateReview}
+              tags={allTags.filter((tag) => privateTagIds.includes(tag.id))}
+              onEdit={() => setShowNoteEditor(true)}
+              shareTargets={myCircles}
+              onShare={(circleId, body) => handleShareToCircle(circleId, body)}
+            />
+          ) : (
+            <ReviewEditor
+              // Remounts fresh whenever the private review's identity
+              // changes (null -> a real row, e.g. right after the
+              // first-rating flow saves one), otherwise this editor's
+              // internal body/tag state would stay frozen at whatever it
+              // had on first mount and silently not show the note that
+              // was just saved.
+              key={privateReview?.id ?? 'private-new'}
+              bookId={book.id}
+              userId={user.id}
+              visibility="private"
+              existingReview={privateReview}
+              existingTagIds={privateTagIds}
+              allTags={allTags}
+              shareTargets={myCircles}
+              onShare={(circleId, body) => handleShareToCircle(circleId, body)}
+              onSaved={(review, tagIds) => {
+                setPrivateReview(review)
+                setPrivateTagIds(tagIds)
+                setShowNoteEditor(false)
+              }}
+            />
+          )}
         </section>
       )}
 

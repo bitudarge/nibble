@@ -9,10 +9,10 @@ const TAG_TYPE_LABELS: Record<string, string> = {
 
 /**
  * The mood/pace/spice_level/genre chip picker, grouped by type. Shared
- * between QuickNoteNudge (where tagging now happens, once, at rating time)
- * and ReviewEditor's private-note path (still editable there after the
- * fact) — pulled out here so the two don't duplicate the same grouping and
- * chip-rendering logic.
+ * between FirstRatingExperience (where tagging now happens, once, at
+ * rating time) and ReviewEditor's private-note path (still editable there
+ * after the fact) — pulled out here so the two don't duplicate the same
+ * grouping and chip-rendering logic.
  */
 export function TagPicker({
   allTags,
