@@ -314,3 +314,94 @@ treat round 2 as UI-unverified the same way, especially: the profile edit
 form's actual save/refresh flow, the "record your streak" button with a
 real reading session, and the new hamburger menu on a real desktop
 browser.
+
+## Round 3 (all sections merged and deployed, 2026-09-04)
+
+A follow-up round from a single informal owner message sent right after
+using round 2's changes for the first time, organized into
+`docs/round3/master-plan.md` (same reason the round 1/2 plan docs exist).
+
+Two real, reproducible bugs were found by exercising the live database as
+an authenticated role and fixed directly, before any PR work started:
+
+1. **Circle creation always failed** ("I can't really form a circle") —
+   `circles` had no SELECT policy that covered the owner immediately after
+   insert, only one requiring circle membership, which the
+   `on_circle_created` trigger creates a moment too late for the same
+   statement's `RETURNING` check. Fixed with an owner-based SELECT policy,
+   `supabase/migrations/20260904000004_circles_select_owner.sql`.
+2. **Monthly/weekly goals couldn't be saved** — the coordinator's own
+   mistake in round 2 section 5: the partial unique index backing them
+   doesn't support Postgres's `ON CONFLICT` inference the way the app's
+   upsert needs. Fixed by swapping to a plain unique constraint (still
+   NULL-safe for legacy yearly-only rows),
+   `supabase/migrations/20260904000005_fix_reading_goals_period_conflict_target.sql`.
+
+Then four sections, one PR each:
+
+1. Dark mode removed entirely (including the OS-`prefers-color-scheme`
+   auto-activation, likely why it showed up unprompted for the owner), the
+   header/menu avatar now links to `/wrap`, the Shelves empty-state icon
+   no longer wiggles. PR #32.
+2. `window.prompt()` (used for both the Dashboard's "Currently reading"
+   quick-update and the Shelves inline progress button) replaced with a
+   real in-page `ProgressControl`: a draggable slider styled as the app's
+   own progress-bar gradient when a book's page count is known, a plain
+   number field otherwise. This was very likely the root cause of
+   progress-logging "not really working on the phone", native prompts are
+   known to behave unreliably inside an installed PWA's standalone mode
+   (this app became installable in round 2 section 1). The "I read today"
+   streak button got bigger with its own `nib-pop` bounce animation
+   (`src/index.css`), a real moment instead of a small plain pill. PR #34.
+3. Circle creation now has an invite moment:
+   `src/components/circles/InviteCodeShare.tsx` shows the new circle's
+   join code big, with a copy-to-clipboard button and the Web Share API
+   where available, as a brief confirmation step right after creating a
+   circle, before continuing on to it. PR #33.
+4. A real first-time rating experience:
+   `src/components/book/FirstRatingExperience.tsx` replaces the old
+   compact `QuickNoteNudge` with a full-screen two-step flow (tag the
+   book, then an optional note) shown only the first time you rate a book
+   with no private note yet, still saves into the same private review row.
+   Once a note exists, `BookPage.tsx`'s "My Notes" section shows it
+   read-only via `src/components/book/PrivateNoteSummary.tsx` (tags, note
+   text, share-to-circle) with a small "Edit" link revealing the same
+   `ReviewEditor` form as before, mirroring round 2 section 2's "Write a
+   Review" reveal-on-click shape. PR #35. Found and fixed a real bug
+   during review, not caught by lint/typecheck/test/build: the book page
+   route (`/book/:bookId`) has no per-book `key`, so React Router reuses
+   the same `BookPage` instance when navigating from one book straight to
+   another, and the new `showNoteEditor` state wasn't reset on that
+   navigation, if you tapped Edit on one book's note and then navigated to
+   a different book, the new book's note would open already in edit mode.
+   Fixed by resetting `showNoteEditor`/`showFirstRatingFlow` in the
+   book-load effect whenever `bookId` changes.
+
+Section 4 of the owner's original message (research a public dataset to
+supplement the recommender until there are more reviews) was investigated
+and explicitly **not** built: the owner chose to skip it and lean on the
+existing quiz + Google Books signals instead, after being shown that even
+Open Library's own bulk data dump carries an ambiguous, hedgy license
+statement despite search results implying a clean CC0 grant. Same standing
+policy as round 1 section 7: no external dataset without an explicit
+license check and owner approval first.
+
+Deployed to both live domains, `npx vercel --prod --yes` run from a
+worktree that lacked the repo's real `.vercel/project.json` link once
+created a stray throwaway Vercel project (`agent-<worktree-id>`) instead
+of updating the real `nibble` project, caught immediately by checking
+`vercel ls` after deploy, fixed by copying the real project link into the
+worktree and redeploying, and the stray project was deleted afterward.
+Worth remembering for any future deploy from a worktree rather than the
+main checkout: confirm `.vercel/project.json` points at `projectName:
+"nibble"` before running `vercel --prod`.
+
+**Same UI-unverified caveat as rounds 1 and 2.** No PR in this round was
+clicked through by the owner in a real signed-in browser session either,
+testing was lint/typecheck/format/test/build, targeted unit tests, and
+(for the two directly-fixed bugs) live database verification as an
+authenticated role. Treat round 3 as unverified in the browser too,
+especially: the progress slider's touch/drag behavior on a real phone (the
+whole reason it was built), the invite-code Web Share API path on a real
+mobile browser, and the first-rating flow's full-screen presentation on
+both a real phone and desktop.
