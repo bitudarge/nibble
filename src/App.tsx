@@ -6,6 +6,7 @@ import { CircleHome } from './routes/CircleHome'
 import { Circles } from './routes/Circles'
 import { Home } from './routes/Home'
 import { Login } from './routes/Login'
+import { MyBooks } from './routes/MyBooks'
 import { Recommendations } from './routes/Recommendations'
 import { RequireAuth } from './routes/RequireAuth'
 import { Search } from './routes/Search'
@@ -34,6 +35,7 @@ function App() {
             <Route path="/circles/:circleId" element={<CircleHome />} />
             <Route path="/recommendations" element={<Recommendations />} />
             <Route path="/wrap" element={<Wrap />} />
+            <Route path="/my-books" element={<MyBooks />} />
             <Route path="/quiz" element={<TasteQuiz />} />
           </Route>
         </Routes>
