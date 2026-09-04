@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Logo } from '../brand/Logo'
 import { useAuth } from '../../lib/auth/useAuth'
+import { resolveDisplayIdentity } from '../../lib/profile/identity'
 import { useTheme } from '../../lib/theme/useTheme'
 import {
   CirclesIcon,
@@ -38,7 +39,7 @@ const NAV_ITEMS = [
  * user's own name/sign-out.
  */
 export function AppShell() {
-  const { user, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -46,10 +47,7 @@ export function AppShell() {
   const menuRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
 
-  const rawName = user?.user_metadata?.full_name
-  const displayName = typeof rawName === 'string' && rawName ? rawName : (user?.email ?? 'Reader')
-  const rawAvatar = user?.user_metadata?.avatar_url
-  const avatarUrl = typeof rawAvatar === 'string' ? rawAvatar : undefined
+  const { displayName, avatarUrl } = resolveDisplayIdentity(user, profile)
 
   // Close the menu on Escape and on an outside click, and return focus to
   // the hamburger button when it closes from Escape so keyboard users
