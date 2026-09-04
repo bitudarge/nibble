@@ -36,6 +36,10 @@ export function BookPage() {
   const { bookId } = useParams<{ bookId: string }>()
   const { user } = useAuth()
   const { celebrate, node: celebrationNode } = useCelebration()
+  // For the optimistic comment shown the instant you post one, before the
+  // real row (with its real profile join) comes back — see ReviewCard.tsx.
+  const rawName = user?.user_metadata?.full_name
+  const currentUserDisplayName = typeof rawName === 'string' && rawName ? rawName : undefined
 
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -449,7 +453,12 @@ export function BookPage() {
           ) : (
             <ul className="flex flex-col gap-2">
               {publicReviews.map((review) => (
-                <ReviewCard key={review.id} review={review} />
+                <ReviewCard
+                  key={review.id}
+                  review={review}
+                  currentUserId={user?.id}
+                  currentUserDisplayName={currentUserDisplayName}
+                />
               ))}
             </ul>
           )}
@@ -481,6 +490,8 @@ export function BookPage() {
                     key={review.id}
                     review={review}
                     byline={`${review.profiles.display_name} in ${review.circles.name}`}
+                    currentUserId={user?.id}
+                    currentUserDisplayName={currentUserDisplayName}
                   />
                 ))}
               </ul>
