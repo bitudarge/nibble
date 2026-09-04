@@ -88,6 +88,16 @@ export function BookPage() {
       if (!bookId || !user) return
       setState('loading')
       setError(null)
+      // The route has no per-book `key`, so navigating from one book's
+      // page straight to another (e.g. via a search result Link) reuses
+      // this same component instance rather than remounting it. Without
+      // resetting these here, leaving Book A's note open for editing and
+      // then navigating to Book B would land on Book B's note already in
+      // edit mode, exactly the "feels like the first time every time"
+      // problem this component exists to avoid.
+      setShowNoteEditor(false)
+      setShowFirstRatingFlow(false)
+      setFirstRatingError(null)
       try {
         const foundBook = await getBookById(bookId)
         if (!foundBook) {
