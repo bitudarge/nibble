@@ -34,3 +34,6 @@ coverage
 # Vercel CLI's local project link + Supabase CLI's local cache.
 .vercel
 supabase/.temp
+
+# Temporary git worktrees for background agents (nested copies of this repo).
+.claude/

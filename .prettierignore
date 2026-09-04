@@ -2,3 +2,5 @@ dist
 node_modules
 # Vendored reference file (design mockup export), not source we edit.
 docs/refinement/Nibbles-design-mockup.html
+# Temporary git worktrees for background agents, not part of this repo's history.
+.claude
