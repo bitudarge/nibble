@@ -51,6 +51,15 @@ export interface CircleSignal {
 export interface TagMatch {
   tag: string
   contribution: number
+  /**
+   * True when this tag's affinity came from the taste quiz rather than
+   * ratings (see scoreBook in scoring.ts) — explainScore uses this so it
+   * never says "you've rated X highly before" for a tag a zero-rating
+   * quiz-only user has never actually rated anything with, that would be
+   * false, not just vague, and this app's whole identity is not being a
+   * black box.
+   */
+  fromQuiz: boolean
 }
 
 export interface ScoredBook {
