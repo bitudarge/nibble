@@ -405,3 +405,38 @@ especially: the progress slider's touch/drag behavior on a real phone (the
 whole reason it was built), the invite-code Web Share API path on a real
 mobile browser, and the first-rating flow's full-screen presentation on
 both a real phone and desktop.
+
+## Recommender: external genre discovery (2026-09-04, PR #37)
+
+A follow-up owner request right after round 3: "work on the recommendation
+system more, recommend books based on the quiz they did, get information
+about books online, and state the reason." The recommender's candidate
+pool had always been capped to whatever books someone already searched for
+and added to the catalog (`getRecentlyAddedBooks` in `src/lib/books/data.ts`),
+so a brand new user who just took the taste quiz for a genre nobody had
+touched yet got nothing real to work with.
+
+`getRecommendations` (`src/lib/recommender/recommend.ts`) now widens the
+pool with real books pulled from Open Library's genre-browsing subjects
+API (`src/lib/books/openLibrary.ts`'s new `searchOpenLibraryBySubject`),
+targeting the user's top genre affinities (`topGenreAffinities`, quiz
+answers and/or ratings, doesn't care which). Discovered books are created
+through the exact same `getOrCreateBook` path `Search.tsx` uses, full
+Google Books enrichment included, so they carry real genre categories and
+score/explain through the identical scoring/explanation pipeline as any
+other candidate, "state the reason" was already the recommender's whole
+identity (`explainScore` in `scoring.ts`), this just gives it real books to
+apply that to. Bounded and best-effort by design
+(`src/lib/recommender/discovery.ts`): capped at 2 genres and 6 results
+each per recommendations load, deduplicated, a failed search or a book
+that fails to save is skipped rather than breaking the page. See
+`src/lib/recommender/README.md` section 7 for the full mechanics.
+
+Verified the real Open Library subjects endpoint's response shape directly
+(`curl https://openlibrary.org/subjects/fantasy.json`) before writing the
+parser, rather than assuming from documentation alone. New unit tests
+cover `topGenreAffinities`, `genreTagToSubjectSlug`, the new Open Library
+wrapper, and `discoverBooksForGenres` itself (mocked I/O) — 145 tests
+total, up from 131. Same UI-unverified caveat as everything else: this
+hasn't been clicked through by the owner in a real signed-in session, only
+lint/typecheck/format/test/build plus the direct API shape check above.
