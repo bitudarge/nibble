@@ -93,20 +93,3 @@ export function HamburgerIcon({ className }: IconProps) {
     </svg>
   )
 }
-
-export function SunIcon({ className }: IconProps) {
-  return (
-    <svg {...common} strokeWidth={2} className={className}>
-      <circle cx="12" cy="12" r="4.4" />
-      <path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6" />
-    </svg>
-  )
-}
-
-export function MoonIcon({ className }: IconProps) {
-  return (
-    <svg {...common} className={className}>
-      <path d="M19 14.5A8 8 0 019.5 5a7 7 0 109.5 9.5z" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
