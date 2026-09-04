@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { needsFallback } from './recommend'
+import { needsFallback, topGenreAffinities } from './recommend'
 import type { TasteProfileData } from './types'
 
 function profile(overrides: Partial<TasteProfileData> = {}): TasteProfileData {
@@ -23,5 +23,38 @@ describe('needsFallback', () => {
 
   it('is true just below the rating threshold with no quiz signal either', () => {
     expect(needsFallback(profile({ ratedBookCount: 2 }))).toBe(true)
+  })
+})
+
+describe('topGenreAffinities', () => {
+  it('returns genres most-liked first', () => {
+    expect(
+      topGenreAffinities({
+        'genre:fantasy': 0.4,
+        'genre:romance': 0.9,
+        'genre:horror': 0.6,
+      }),
+    ).toEqual(['romance', 'horror', 'fantasy'])
+  })
+
+  it('ignores non-genre tags and disliked genres', () => {
+    expect(
+      topGenreAffinities({
+        'genre:fantasy': 0.5,
+        'pace:slow-burn': 0.8,
+        'genre:horror': -0.2,
+      }),
+    ).toEqual(['fantasy'])
+  })
+
+  it('respects the limit', () => {
+    expect(
+      topGenreAffinities({ 'genre:fantasy': 0.9, 'genre:romance': 0.8, 'genre:horror': 0.7 }, 2),
+    ).toEqual(['fantasy', 'romance'])
+  })
+
+  it('returns nothing for an empty or all-negative profile', () => {
+    expect(topGenreAffinities({})).toEqual([])
+    expect(topGenreAffinities({ 'genre:horror': -0.5 })).toEqual([])
   })
 })

@@ -74,6 +74,21 @@ tag affinity either. A user who took the taste quiz gets scored, explained
 recommendations from their very first visit, zero ratings needed — never a
 fake tag-match explanation for a taste profile that doesn't exist yet.
 
+**7. Discovery** (`discovery.ts`) — once there's a real taste profile,
+`recommend.ts` doesn't only score whatever's already in the local catalog.
+`topGenreAffinities` picks the taste profile's best-liked genres (quiz
+answers and/or ratings), and `discoverBooksForGenres` searches Open
+Library's genre-browsing API for each one, pulling in books nobody's
+searched for or added yet via the same `getOrCreateBook` path Search.tsx
+uses (full Google Books enrichment included, so they carry real genre
+categories and score/explain exactly like any other candidate). This is
+what makes "recommend books based on the quiz" actually mean something
+before the catalog has much in it: a fantasy-loving day-one quiz taker
+gets real fantasy books, not just whatever three books happen to already
+be in the database. Bounded and best-effort (see the constants at the top
+of `discovery.ts`) — a flaky external API skips that genre rather than
+breaking the page.
+
 ## Public interface
 
 Import from `index.ts`, not the individual files:
@@ -93,11 +108,18 @@ import { getRecommendations, recomputeTasteProfile, analyzeReviewText } from '..
 
 ## Known limitations / how to improve this later
 
-- **Candidate pool is capped** at the 200 most recently added books
-  (`recommend.ts`'s `CANDIDATE_POOL_SIZE`). Fine while the catalog is
-  small; once it isn't, either paginate through the full catalog or
-  pre-filter candidates by genre overlap with the user's taste profile
-  before scoring.
+- **Candidate pool from the local catalog is capped** at the 200 most
+  recently added books (`recommend.ts`'s `CANDIDATE_POOL_SIZE`). Fine
+  while the catalog is small; once it isn't, either paginate through the
+  full catalog or pre-filter candidates by genre overlap with the user's
+  taste profile before scoring. Discovery (section 7 above) only widens
+  this with a handful of externally-found books per top genre, it doesn't
+  remove this cap.
+- **Discovery only runs off genre affinity**, not mood/pace, since Open
+  Library's subject API is genre-shaped, not mood-shaped. A user whose
+  strongest signal is "cozy" or "slow-burn" rather than a specific genre
+  won't get much from it, they'll still get scored recommendations from
+  the local catalog as before, just without the external boost.
 - **Sentiment/themes aren't fed into scoring yet** — they're computed and
   stored on every review, but `scoreBook` only uses tag data so far. A
   natural next step: blend `sentiment_score` into the tag-affinity
