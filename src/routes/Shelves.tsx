@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
+import { Logo } from '../components/brand/Logo'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { useAuth } from '../lib/auth/useAuth'
+import { getStreak, isStreakMilestone } from '../lib/goals/data'
+import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemsWithBooks, setShelfStatus, type ShelfItemWithBook } from '../lib/shelf/data'
-import type { ShelfStatus } from '../types/database'
+import type { ReadingStreak, ShelfStatus } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded'
 
@@ -33,6 +36,9 @@ export function Shelves() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [activeShelf, setActiveShelf] = useState<ShelfStatus>('reading')
+  // Kept just for before/after streak-milestone comparison when logging
+  // progress inline, same shape as Home.tsx's quickLogProgress.
+  const [streak, setStreak] = useState<ReadingStreak | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -41,9 +47,13 @@ export function Shelves() {
       if (!user) return
       setState('loading')
       try {
-        const shelfItems = await getShelfItemsWithBooks(user.id)
+        const [shelfItems, readingStreak] = await Promise.all([
+          getShelfItemsWithBooks(user.id),
+          getStreak(user.id),
+        ])
         if (!cancelled) {
           setItems(shelfItems)
+          setStreak(readingStreak)
           setState('loaded')
         }
       } catch (err) {
@@ -75,8 +85,53 @@ export function Shelves() {
     }
   }
 
+  // Same interaction Home.tsx's "Currently reading" strip already uses for
+  // this exact need (a quick page-number prompt rather than a persistent
+  // inline field, which would crowd this grid's already-compact cards).
+  async function quickLogProgress(item: ShelfItemWithBook, toPage: number) {
+    if (!user) return
+    const streakBefore = streak?.current_streak ?? 0
+    try {
+      await logReadingProgress(
+        user.id,
+        item.book_id,
+        item.current_page,
+        toPage,
+        item.books.page_count,
+      )
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === item.id
+            ? {
+                ...it,
+                current_page: toPage,
+                percent_complete: it.books.page_count
+                  ? Math.min((toPage / it.books.page_count) * 100, 100)
+                  : null,
+              }
+            : it,
+        ),
+      )
+      const streakAfter = await getStreak(user.id)
+      setStreak(streakAfter)
+      const after = streakAfter?.current_streak ?? 0
+      if (isStreakMilestone(streakBefore, after)) {
+        celebrate(`${after} days in a row. Keep it warm.`)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not log your progress.')
+    }
+  }
+
   if (state === 'loading') {
-    return <p className="font-sans text-muted">Loading your shelves.</p>
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+        <div style={{ animation: 'nib-wig 2.6s ease-in-out infinite', transformOrigin: '50% 80%' }}>
+          <Logo variant="mark" className="h-16" />
+        </div>
+        <p className="font-sans text-sm text-muted">Finding your shelves.</p>
+      </div>
+    )
   }
 
   if (state === 'error') {
@@ -171,6 +226,31 @@ export function Shelves() {
               <p className="mb-2 truncate font-sans text-[11.5px] text-muted">
                 {item.books.author}
               </p>
+              {item.status === 'reading' && (
+                <div className="mb-2 flex items-center justify-between gap-1.5">
+                  <span className="truncate font-sans text-[11px] font-bold text-muted">
+                    {item.books.page_count
+                      ? `page ${item.current_page ?? 0} of ${item.books.page_count}`
+                      : `page ${item.current_page ?? 0}`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = window.prompt(
+                        'What page are you on?',
+                        String(item.current_page ?? ''),
+                      )
+                      const page = Number(input)
+                      if (input && Number.isFinite(page) && page >= 0) {
+                        void quickLogProgress(item, page)
+                      }
+                    }}
+                    className="flex-none rounded-full bg-leaf px-2.5 py-1 font-sans text-[11px] font-bold text-on-leaf transition-transform active:scale-95"
+                  >
+                    Update
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => void moveTo(item, NEXT_STATUS[item.status])}
