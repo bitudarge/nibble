@@ -143,7 +143,7 @@ export function Search() {
     setSearchParams({}, { replace: true })
 
     const slug = genreTagToSubjectSlug(genre === ALL_CHIP ? 'fiction' : genre)
-    searchOpenLibraryBySubject(slug, 24)
+    searchOpenLibraryBySubject(slug, 24, 'new')
       .then((docs) => {
         if (genreRequestIdRef.current !== requestId) return
         setResults(docs)
@@ -160,14 +160,19 @@ export function Search() {
       })
   }
 
-  // Run once on mount, for a deep link like /search?q=circe. Not part of
-  // scheduleSearch's dependency chain since it should only ever fire once.
-  // The search itself is kicked off from a microtask (not the effect body
-  // directly) so the resulting setState calls are treated as coming from
-  // a callback, not synchronously from the effect.
+  // Run once on mount, for a deep link like /search?q=circe — or, with no
+  // query, land on the "All" genre shelf instead of an empty "type
+  // something" placeholder. The owner said Discover "isn't working" when
+  // it opens to nothing and asked for it to default to All, and an empty
+  // landing state reads as broken even though nothing's actually wrong.
+  // Not part of scheduleSearch's dependency chain since it should only
+  // ever fire once. The search itself is kicked off from a microtask (not
+  // the effect body directly) so the resulting setState calls are treated
+  // as coming from a callback, not synchronously from the effect.
   useEffect(() => {
     const trimmed = initialQuery.trim()
     if (trimmed) void Promise.resolve().then(() => runSearch(trimmed))
+    else void Promise.resolve().then(() => handleChipClick(ALL_CHIP))
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current)
       abortRef.current?.abort()

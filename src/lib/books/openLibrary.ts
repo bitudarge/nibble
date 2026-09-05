@@ -56,51 +56,72 @@ export async function searchOpenLibrary(
     }))
 }
 
-interface OpenLibrarySubjectAuthor {
-  name?: string
-}
+// A title containing script outside the Latin range (CJK, Hangul,
+// Cyrillic, Arabic, Hebrew, Thai) is excluded from genre-browse results —
+// see looksLikeEnglishTitle just below for why this exists alongside the
+// query's own `language=eng` filter, not instead of it.
+const NON_LATIN_SCRIPT = new RegExp(
+  '[' +
+    'Ѐ-ӿ' + // Cyrillic
+    '֐-׿' + // Hebrew
+    '؀-ۿ' + // Arabic
+    '฀-๿' + // Thai
+    '぀-ヿ' + // Hiragana + Katakana
+    '一-鿿' + // CJK unified ideographs
+    '가-힯' + // Hangul syllables
+    ']',
+)
 
-interface OpenLibrarySubjectWork {
-  key: string
-  title: string
-  authors?: OpenLibrarySubjectAuthor[]
-  cover_id?: number
-  first_publish_year?: number
+function looksLikeEnglishTitle(title: string): boolean {
+  return !NON_LATIN_SCRIPT.test(title)
 }
-
-interface OpenLibrarySubjectResponse {
-  works: OpenLibrarySubjectWork[]
-}
-
-const SUBJECT_URL = 'https://openlibrary.org/subjects'
 
 /**
- * Open Library's purpose-built genre-browsing API, used by the recommender
+ * Open Library's genre-browsing query, used by the recommender
  * (`src/lib/recommender/discovery.ts`) to pull in books nobody's added to
- * Nibble yet for a genre the user's taste profile favors, rather than only
- * ever recommending from whatever's already in the catalog. `subjectSlug`
- * is lowercase and underscore-separated ("science_fiction", "fantasy") —
- * see `genreTagToSubjectSlug` in the recommender's tagVocabulary.ts for how
- * a genre tag becomes one. An unrecognized slug isn't an error, Open
- * Library just returns an empty `works` list for it.
+ * Nibble yet for a genre the user's taste profile favors, and by
+ * Discover's own genre chips — rather than only ever recommending from
+ * whatever's already in the catalog. `subjectSlug` is lowercase and
+ * underscore-separated ("science_fiction", "fantasy") — see
+ * `genreTagToSubjectSlug` in the recommender's tagVocabulary.ts for how a
+ * genre tag becomes one. An unrecognized slug isn't an error, Open
+ * Library just returns no matches for it.
  *
- * `sort` matters a lot here: the endpoint's own default ordering (omit
- * the param, or equivalently 'editions') is by edition count, which
- * skews heavily toward old public-domain classics — confirmed directly,
- * the unsorted "fantasy" subject's top results are Alice in Wonderland
- * (1865), The Wonderful Wizard of Oz (1899), Gulliver's Travels (1726).
- * 'new' sorts by first-publish-date descending instead, which is what
- * discovery.ts uses by default now rather than only when a user
- * explicitly asks for newer books.
+ * Goes through the search endpoint (`q=subject:X`) rather than the
+ * purpose-built `/subjects/X.json` browsing endpoint, for two reasons:
+ * `/subjects` has no per-work language field at all, and its own default
+ * ordering skews heavily toward old public-domain classics — confirmed
+ * directly, the unsorted "fantasy" subject's top results there were Alice
+ * in Wonderland (1865), The Wonderful Wizard of Oz (1899), Gulliver's
+ * Travels (1726). `language=eng` on the search endpoint filters most
+ * non-English editions out server-side (the owner asked for Discover/
+ * recommendation picks to be English-only), though it isn't fully
+ * trustworthy on its own — confirmed directly, a real query still
+ * returned several all-Japanese-titled light-novel entries tagged "eng".
+ * `looksLikeEnglishTitle` catches exactly that script-based case as a
+ * backstop; a Latin-script foreign title with no distinguishing script
+ * (French, Spanish, German) can still slip through occasionally, a real
+ * but much rarer gap than doing no filtering at all.
+ *
+ * `sort` matters a lot for freshness: omitting it uses relevance, which
+ * in practice already favors well-known modern books over the `/subjects`
+ * endpoint's classics-skew, `new` sorts by first-publish-date descending
+ * (what discovery.ts uses by default, rather than only when a user
+ * explicitly asks for newer books), `old` the reverse. Over-fetches from
+ * Open Library first (some subjects have a lot of foreign-language
+ * editions to filter back out) so the language filter still leaves close
+ * to `limit` results rather than starving the caller.
  */
 export async function searchOpenLibraryBySubject(
   subjectSlug: string,
   limit = 10,
   sort?: 'new' | 'old',
 ): Promise<OpenLibrarySearchResult[]> {
-  const url = new URL(`${SUBJECT_URL}/${subjectSlug}.json`)
-  url.searchParams.set('limit', String(limit))
-  url.searchParams.set('details', 'false')
+  const url = new URL(SEARCH_URL)
+  url.searchParams.set('q', `subject:${subjectSlug}`)
+  url.searchParams.set('language', 'eng')
+  url.searchParams.set('fields', 'key,title,author_name,first_publish_year,cover_i')
+  url.searchParams.set('limit', String(limit * 3))
   if (sort) url.searchParams.set('sort', sort)
 
   const response = await fetch(url)
@@ -108,16 +129,17 @@ export async function searchOpenLibraryBySubject(
     throw new Error(`Open Library subject lookup failed (${response.status}).`)
   }
 
-  const data = (await response.json()) as OpenLibrarySubjectResponse
+  const data = (await response.json()) as OpenLibrarySearchResponse
 
-  return (data.works ?? [])
-    .filter((work) => work.key && work.title)
-    .map((work) => ({
-      openLibraryId: work.key,
-      title: work.title,
-      author: work.authors?.[0]?.name ?? null,
-      publishedYear: work.first_publish_year ?? null,
-      coverUrl: work.cover_id ? `https://covers.openlibrary.org/b/id/${work.cover_id}-M.jpg` : null,
+  return data.docs
+    .filter((doc) => doc.key && doc.title && looksLikeEnglishTitle(doc.title))
+    .slice(0, limit)
+    .map((doc) => ({
+      openLibraryId: doc.key,
+      title: doc.title,
+      author: doc.author_name?.[0] ?? null,
+      publishedYear: doc.first_publish_year ?? null,
+      coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
     }))
 }
 
