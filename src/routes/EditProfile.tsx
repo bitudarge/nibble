@@ -1,15 +1,27 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MASCOT_POSES, type MascotPose } from '../components/brand/mascotPoses'
 import { useAuth } from '../lib/auth/useAuth'
 import { updateProfile } from '../lib/profile/data'
 import { resolveDisplayIdentity } from '../lib/profile/identity'
+
+const MASCOT_PICKER_ORDER: { pose: MascotPose; label: string }[] = [
+  { pose: 'eating', label: 'Nibbling' },
+  { pose: 'hearts', label: 'In love with it' },
+  { pose: 'idea', label: 'Got an idea' },
+  { pose: 'thinking', label: 'Thinking it over' },
+  { pose: 'curious', label: 'Curious' },
+  { pose: 'resting', label: 'Taking it easy' },
+]
 
 /**
  * Lets a user edit the name/avatar the rest of the app shows for them
  * (comments, circle reviews, the nav header), see resolveDisplayIdentity
  * for how this overrides the Google account's own name/photo once set.
- * No Supabase Storage bucket exists yet, so the avatar is a plain image
- * URL field rather than a real upload, a reasonable v1.
+ * No Supabase Storage bucket exists yet, so a real photo is still a plain
+ * image URL field, but picking one of the mascot's own poses needs no
+ * upload at all, it's just a bundled asset's resolved URL — same
+ * `avatar_url` column either way, the picker just fills the same field.
  */
 export function EditProfile() {
   const { user, profile, refreshProfile } = useAuth()
@@ -80,6 +92,32 @@ export function EditProfile() {
           />
         </label>
 
+        <div className="flex flex-col gap-2">
+          <span className="font-sans text-sm text-ink">Or pick a mascot</span>
+          <div className="flex flex-wrap gap-2.5">
+            {MASCOT_PICKER_ORDER.map(({ pose, label }) => {
+              const src = MASCOT_POSES[pose]
+              const selected = avatarUrl === src
+              return (
+                <button
+                  key={pose}
+                  type="button"
+                  onClick={() => setAvatarUrl(src)}
+                  disabled={saving}
+                  aria-label={label}
+                  aria-pressed={selected}
+                  title={label}
+                  className={`h-16 w-16 flex-none rounded-2xl p-1 transition-transform active:scale-95 ${
+                    selected ? 'bg-leaf ring-2 ring-sage' : 'bg-tint'
+                  }`}
+                >
+                  <img src={src} alt="" className="h-full w-full object-contain" />
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         <label className="flex flex-col gap-1.5 font-sans text-sm text-ink">
           Photo URL (optional)
           <input
@@ -97,7 +135,7 @@ export function EditProfile() {
         <button
           type="submit"
           disabled={saving}
-          className="self-start rounded-full bg-sage px-5 py-2 font-sans text-sm font-bold text-surface transition-transform active:scale-95 disabled:opacity-50"
+          className="btn-cta self-start rounded-full bg-sage px-6 py-2.5 font-sans text-sm font-bold text-surface disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
