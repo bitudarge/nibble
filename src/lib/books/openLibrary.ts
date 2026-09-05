@@ -158,3 +158,64 @@ export async function fetchOpenLibraryWorkDetails(
     return null
   }
 }
+
+interface OpenLibraryEditionEntry {
+  number_of_pages?: number
+  languages?: { key: string }[]
+}
+
+interface OpenLibraryEditionsResponse {
+  entries?: OpenLibraryEditionEntry[]
+}
+
+/** The value appearing most often in a list, ties broken by first occurrence. */
+function mode(values: number[]): number | null {
+  if (values.length === 0) return null
+  const counts = new Map<number, number>()
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1)
+  let best = values[0]!
+  let bestCount = 0
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value
+      bestCount = count
+    }
+  }
+  return best
+}
+
+/**
+ * Best-effort page count from Open Library's editions of a work, for
+ * books Google Books had nothing on. Editions of the very same book
+ * genuinely disagree on page count — different translations, print runs,
+ * and formats (audiobook duration masquerading as "pages," large-print
+ * runs, etc.) all get their own edition record with their own number —
+ * confirmed directly against a real work (The Hobbit's editions span
+ * 590-896 pages depending on translation). English-language editions are
+ * preferred, since this app is English-first and that's the count a
+ * reader here is most likely to actually be holding; the most common
+ * count among them wins over just taking the first one, so one unusual
+ * edition (a single translation, an odd large-print run) doesn't set the
+ * number. Falls back to the mode across every edition, regardless of
+ * language, only if no English edition reports a count at all. Never
+ * throws, same "missing data isn't an error" contract as the other
+ * enrichment fetchers.
+ */
+export async function fetchOpenLibraryPageCount(openLibraryId: string): Promise<number | null> {
+  try {
+    const response = await fetch(`https://openlibrary.org${openLibraryId}/editions.json?limit=20`)
+    if (!response.ok) return null
+    const data = (await response.json()) as OpenLibraryEditionsResponse
+    const entries = data.entries ?? []
+
+    const isEnglish = (entry: OpenLibraryEditionEntry) =>
+      !entry.languages || entry.languages.some((l) => l.key === '/languages/eng')
+    const pageCounts = (list: OpenLibraryEditionEntry[]) =>
+      list.map((e) => e.number_of_pages).filter((n): n is number => typeof n === 'number' && n > 0)
+
+    const englishCounts = pageCounts(entries.filter(isEnglish))
+    return mode(englishCounts.length > 0 ? englishCounts : pageCounts(entries))
+  } catch {
+    return null
+  }
+}

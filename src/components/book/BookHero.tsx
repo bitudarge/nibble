@@ -1,8 +1,11 @@
 import { StarRating } from './StarRating'
 
 /**
- * Purely presentational: the cover, title, synopsis, genre chips, and
- * rating for a book page. Takes plain props rather than fetching anything
+ * Purely presentational: the cover, title, synopsis, and rating for a
+ * book page. Categories still come in as a prop (used to decide whether
+ * there's enough known about the book to show the About card at all —
+ * see below) but aren't rendered as chips anymore, per the owner's "get
+ * rid of the tags." Takes plain props rather than fetching anything
  * itself, so it's easy to unit-test without a Supabase session. Centered,
  * stacked layout matching the round 4 mockup's book detail page.
  */
@@ -73,18 +76,6 @@ export function BookHero({
       {(description || categories.length > 0 || pageCount || publishedYear) && (
         <div className="mt-5 w-full rounded-[26px] bg-surface p-4 text-left shadow-soft">
           <h2 className="mb-2 font-display text-base font-semibold text-ink">About this book</h2>
-          {categories.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {categories.map((category) => (
-                <span
-                  key={category}
-                  className="rounded-full bg-leaf px-3 py-1 font-sans text-xs font-bold text-on-leaf"
-                >
-                  {category}
-                </span>
-              ))}
-            </div>
-          )}
           {description ? (
             <p className="font-sans text-sm leading-relaxed text-ink">{description}</p>
           ) : (

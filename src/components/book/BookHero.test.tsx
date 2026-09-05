@@ -33,10 +33,15 @@ describe('BookHero', () => {
     expect(screen.getByRole('heading', { name: 'Piranesi' })).toBeInTheDocument()
   })
 
-  it('shows a chip for each category', () => {
+  it('never renders categories as chips, even when there are some', () => {
     render(<BookHero {...baseProps} categories={['Fiction', 'Fantasy']} />)
-    expect(screen.getByText('Fiction')).toBeInTheDocument()
-    expect(screen.getByText('Fantasy')).toBeInTheDocument()
+    expect(screen.queryByText('Fiction')).not.toBeInTheDocument()
+    expect(screen.queryByText('Fantasy')).not.toBeInTheDocument()
+  })
+
+  it('still shows the About card when there is no synopsis but there are categories', () => {
+    render(<BookHero {...baseProps} categories={['Fantasy']} />)
+    expect(screen.getByText('About this book')).toBeInTheDocument()
   })
 
   it('falls back to a placeholder when there is no cover', () => {
