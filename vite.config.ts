@@ -43,10 +43,19 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Precache the built shell (JS/CSS/HTML/icons); never cache API
-        // calls to Supabase/Open Library/Google Books, those must always
-        // be fresh or fail honestly, not silently serve stale data.
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // Precache the built shell (JS/CSS/HTML) plus the small app icons
+        // under icons/. Deliberately does NOT precache the mascot/logo
+        // illustrations under assets/ (24 mascot poses plus the logo
+        // lockup, ~2MB total) — the old blanket `png` pattern forced the
+        // service worker to download every one of them on a visitor's
+        // very first visit, regardless of whether they'd ever see more
+        // than two or three, a real contributor to "pages take so long to
+        // load." They still load and cache normally via the browser's own
+        // HTTP cache the moment a page actually renders one — this just
+        // stops downloading all of them up front. Never cache API calls
+        // to Supabase/Open Library/Google Books either way, those must
+        // always be fresh or fail honestly, not silently serve stale data.
+        globPatterns: ['**/*.{js,css,html,woff2}', 'icons/*.png'],
       },
     }),
   ],
