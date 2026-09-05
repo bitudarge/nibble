@@ -71,15 +71,29 @@ export function mergeEnrichmentSources(
  * Google's data always wins where it has any, since it's generally
  * richer; Open Library only fills the gaps.
  *
- * Runs once per book: the `enriched` flag in metadata marks that we've
- * already asked both sources, whether or not either had anything useful,
- * so a book doesn't get re-queried on every page view. If the update
+ * Skips books already marked enriched, UNLESS that earlier attempt came
+ * back completely empty (no description, no categories) — those books
+ * predate this Open Library fallback (or briefly hit both sources
+ * failing at once) and are worth one retry the next time they're
+ * viewed, rather than staying permanently blank because an old flag says
+ * "already asked." A book with real data from either source, even just
+ * one of the two, is never re-queried.
+ */
+export function hasUsefulEnrichment(book: Book): boolean {
+  const description = book.metadata.description
+  const categories = book.metadata.categories
+  return Boolean(description) || (Array.isArray(categories) && categories.length > 0)
+}
+
+/**
+ * Runs once per book, with the one exception above: the `enriched` flag
+ * in metadata marks that we've already asked both sources. If the update
  * fails for any reason, the caller just gets the book back unchanged
  * rather than an error, since a page that already renders fine with
  * Open Library's own search-result data shouldn't break over this.
  */
 export async function enrichBook(book: Book): Promise<Book> {
-  if (book.metadata.enriched) return book
+  if (book.metadata.enriched && hasUsefulEnrichment(book)) return book
   const db = requireSupabase()
 
   const google = await fetchGoogleBooksDetails(book.title, book.author)

@@ -142,15 +142,14 @@ export function BookPage() {
 
         if (cancelled) return
         setBook(foundBook)
-        // Books added before this feature existed (or that Google Books
-        // had nothing for last time) get their one-time enrichment lookup
-        // here, in the background, so the rest of the page never waits on
-        // it — it just fills in once it resolves.
-        if (!foundBook.metadata.enriched) {
-          void enrichBook(foundBook).then((richer) => {
-            if (!cancelled) setBook(richer)
-          })
-        }
+        // Books added before this feature existed (or where every source
+        // came back empty last time) get an enrichment lookup here, in
+        // the background, so the rest of the page never waits on it — it
+        // just fills in once it resolves. enrichBook itself decides
+        // whether there's anything worth re-asking for.
+        void enrichBook(foundBook).then((richer) => {
+          if (!cancelled) setBook(richer)
+        })
         setAggregate(agg)
         setShelfItem(shelf)
         setMyRating(rating?.stars ?? null)

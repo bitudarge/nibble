@@ -4,14 +4,18 @@ import { searchOpenLibraryBySubject } from '../books/openLibrary'
 import { genreTagToSubjectSlug } from './tagVocabulary'
 
 // How many of the user's top genre affinities to search externally, and
-// how many Open Library results to pull per genre. Kept small: this turns
-// into real network calls and, for books nobody's added yet, real writes
-// (getOrCreateBook + a one-time Google Books enrichment lookup) on every
-// call, not just reads, so it stays bounded rather than growing with the
-// user's whole taste profile.
-const GENRES_TO_SEARCH = 2
-const RESULTS_PER_GENRE = 6
-const MAX_DISCOVERED_BOOKS = 8
+// how many Open Library results to pull per genre. Kept bounded: this
+// turns into real network calls and, for books nobody's added yet, real
+// writes (getOrCreateBook + a one-time enrichment lookup) on every call,
+// not just reads, so it stays capped rather than growing with the user's
+// whole taste profile. Raised from the original 2 genres / 6 results / 8
+// total once recommend.ts started filtering out candidates with no real
+// tag-match reason (see hasRealReason) — that filter is honest but means
+// a thin candidate pool can leave a well-onboarded user with very few
+// picks, so there's more raw material here for it to work with.
+const GENRES_TO_SEARCH = 3
+const RESULTS_PER_GENRE = 8
+const MAX_DISCOVERED_BOOKS = 16
 
 /**
  * Pulls in books nobody's added to Nibble yet, from Open Library's
