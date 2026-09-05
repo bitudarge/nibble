@@ -1,7 +1,11 @@
 import { supabase } from '../supabase/client'
 import type { Book } from '../../types/database'
 import { fetchGoogleBooksDetails, type GoogleBooksDetails } from './googleBooks'
-import type { OpenLibrarySearchResult } from './openLibrary'
+import {
+  fetchOpenLibraryWorkDetails,
+  type OpenLibrarySearchResult,
+  type OpenLibraryWorkDetails,
+} from './openLibrary'
 
 function requireSupabase() {
   if (!supabase) throw new Error('Supabase is not configured — check your .env file.')
@@ -35,23 +39,55 @@ export function buildEnrichmentUpdate(
 }
 
 /**
- * Fills in the rich detail Open Library doesn't have: synopsis, genre
- * categories, and a better page count/year/cover for whichever of those
- * Open Library was missing (Google Books is the primary source for detail,
- * Open Library the fallback, never the other way round).
+ * Combines both enrichment sources into one `GoogleBooksDetails`-shaped
+ * result: Google Books wins wherever it has data, Open Library's per-work
+ * description/subjects fill in only what Google left empty. Pure, so the
+ * "which source wins" decision is testable without mocking either fetch
+ * call, same reasoning as buildEnrichmentUpdate above.
+ */
+export function mergeEnrichmentSources(
+  google: GoogleBooksDetails | null,
+  fallback: OpenLibraryWorkDetails | null,
+): GoogleBooksDetails | null {
+  if (!fallback) return google
+  return {
+    description: google?.description ?? fallback.description,
+    categories: google?.categories.length ? google.categories : fallback.subjects,
+    pageCount: google?.pageCount ?? null,
+    publishedYear: google?.publishedYear ?? null,
+    coverUrl: google?.coverUrl ?? null,
+  }
+}
+
+/**
+ * Fills in the rich detail Open Library's search results don't carry:
+ * synopsis, genre categories, and a better page count/year/cover for
+ * whichever of those was still missing. Google Books is the primary
+ * source; when it has nothing (a real, common case — the unauthenticated
+ * quota is shared globally and does run out entirely some days, and
+ * Nibble has no API key configured yet, see .env.example), this falls
+ * back to Open Library's own per-work description and subject list
+ * instead of leaving the book with no summary and no genre signal at all.
+ * Google's data always wins where it has any, since it's generally
+ * richer; Open Library only fills the gaps.
  *
  * Runs once per book: the `enriched` flag in metadata marks that we've
- * already asked Google Books, whether or not it had anything useful,
- * so a book with no Google Books match doesn't get re-queried on every
- * page view. If the update fails for any reason, the caller just gets
- * the book back unchanged rather than an error, since a page that already
- * renders fine with Open Library data shouldn't break over this.
+ * already asked both sources, whether or not either had anything useful,
+ * so a book doesn't get re-queried on every page view. If the update
+ * fails for any reason, the caller just gets the book back unchanged
+ * rather than an error, since a page that already renders fine with
+ * Open Library's own search-result data shouldn't break over this.
  */
 export async function enrichBook(book: Book): Promise<Book> {
   if (book.metadata.enriched) return book
   const db = requireSupabase()
 
-  const details = await fetchGoogleBooksDetails(book.title, book.author)
+  const google = await fetchGoogleBooksDetails(book.title, book.author)
+  const fallback =
+    !google?.description || !google.categories.length
+      ? await fetchOpenLibraryWorkDetails(book.open_library_id)
+      : null
+  const details = mergeEnrichmentSources(google, fallback)
   const update = buildEnrichmentUpdate(book, details)
 
   const { data: updated, error } = await db

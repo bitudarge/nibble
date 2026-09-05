@@ -107,3 +107,54 @@ export async function searchOpenLibraryBySubject(
       coverUrl: work.cover_id ? `https://covers.openlibrary.org/b/id/${work.cover_id}-M.jpg` : null,
     }))
 }
+
+export interface OpenLibraryWorkDetails {
+  description: string | null
+  subjects: string[]
+}
+
+// Open Library's own `description` field is documented as a plain string,
+// but a real fraction of work records still carry it in the older
+// `{type, value}` wrapper shape instead — handle both rather than silently
+// dropping every book that happens to use the older shape.
+type OpenLibraryDescription = string | { value?: string } | undefined
+
+interface OpenLibraryWorkResponse {
+  description?: OpenLibraryDescription
+  subjects?: string[]
+}
+
+function normalizeDescription(description: OpenLibraryDescription): string | null {
+  if (typeof description === 'string') return description
+  if (description && typeof description === 'object') return description.value ?? null
+  return null
+}
+
+/**
+ * Open Library's per-work detail (synopsis + subject tags), keyed by the
+ * exact same work id already stored as `books.open_library_id`
+ * ("/works/OL...W"). This is the fallback source for `enrichBook` when
+ * Google Books has nothing to offer — unauthenticated Google Books quota
+ * is shared globally and can run out entirely for a stretch (0 requests/
+ * day happens in practice), and Nibble has no key configured yet, so
+ * without this fallback every book's "About this book" card and every
+ * genre-affinity match would silently go empty. Never throws, same
+ * "missing data isn't an error" contract as fetchGoogleBooksDetails.
+ */
+export async function fetchOpenLibraryWorkDetails(
+  openLibraryId: string,
+): Promise<OpenLibraryWorkDetails | null> {
+  try {
+    const response = await fetch(`https://openlibrary.org${openLibraryId}.json`)
+    if (!response.ok) return null
+    const data = (await response.json()) as OpenLibraryWorkResponse
+    const description = normalizeDescription(data.description)
+    const subjects = Array.isArray(data.subjects)
+      ? data.subjects.filter((s): s is string => typeof s === 'string')
+      : []
+    if (!description && subjects.length === 0) return null
+    return { description, subjects }
+  } catch {
+    return null
+  }
+}
