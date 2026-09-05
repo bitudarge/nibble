@@ -1,7 +1,10 @@
 @import 'tailwindcss';
 
 /*
- * Nibbles design tokens, pulled from Nibbles-design-mockup.html.
+ * Nibbles design tokens, pulled from the round 4 mockup
+ * (Nibbles App v4 (offline).html) the owner supplied — its own colors,
+ * both fonts, and its "3D pressable button" pattern (see .btn-cta below)
+ * are the new baseline, replacing round 1's mockup-derived palette.
  *
  * How this works: the raw hex values live as plain CSS variables on :root
  * below. The @theme block then points Tailwind's color names (bg-page,
@@ -12,7 +15,7 @@
  * dark palette without being asked.
  */
 @theme {
-  --font-display: 'Lora', Georgia, serif;
+  --font-display: 'Baloo 2', 'Nunito', ui-sans-serif, system-ui, sans-serif;
   --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
 
   --color-page: var(--nibbles-page);
@@ -36,32 +39,36 @@
 }
 
 :root {
-  /* Greens sampled straight from the mascot art (nibbles-mascot.png): its
-     bright leaf-green body and deep olive segments/antennae, so the app's
-     palette reads as "the same green as the bug" rather than an arbitrary
-     pick. Page/surface are white and near-white, not cream, per the
-     "different greens and white" brief. */
-  --nibbles-page: #f6faf3;
+  /* Straight from the round 4 mockup's own palette — every accent in that
+     design is a shade of green, deliberately no pink/red/yellow anywhere,
+     including its error state, so this app's existing all-green approach
+     (no dark mode, honey tokens already green not yellow) carries over
+     unchanged in spirit, just with this specific set of greens. */
+  --nibbles-page: #f5fbf1;
   --nibbles-surface: #ffffff;
-  --nibbles-ink: #1f2a1a;
-  --nibbles-muted: #5c6b57;
-  --nibbles-line: #dbe8d3;
-  --nibbles-tint: #eff6ea;
+  --nibbles-ink: #2f4726;
+  --nibbles-muted: #6e8562;
+  --nibbles-line: #eaf5e2;
+  --nibbles-tint: #f7fcf3;
 
-  --nibbles-sage: #5b8c3e;
-  --nibbles-sage-deep: #3f6b2a;
-  --nibbles-leaf: #e3f2d9;
-  --nibbles-on-leaf: #3f6b2a;
+  --nibbles-sage: #7cc05a;
+  --nibbles-sage-deep: #4c8a33;
+  --nibbles-leaf: #e9f5e0;
+  --nibbles-on-leaf: #3a6b26;
 
   /* Renamed in spirit only (still --nibbles-honey-* so every call site
      that already uses these tokens for streaks/celebrations/highlights
-     keeps working) — repointed from yellow/amber to a brighter accent
-     green, since the new palette has no yellow in it at all. */
-  --nibbles-honey: #7cb342;
-  --nibbles-honey-soft: #e8f5e0;
-  --nibbles-honey-text: #4c7a2e;
+     keeps working) — stays in the same green family as the rest of this
+     palette, just a distinct enough shade to read as its own accent. */
+  --nibbles-honey: #5fa23f;
+  --nibbles-honey-soft: #e9f5e0;
+  --nibbles-honey-text: #3a6b26;
 
-  --nibbles-shadow: rgba(31, 42, 26, 0.12);
+  /* The offset color under every .btn-cta 3D button (see below) — a
+     darker green than --nibbles-sage, used only for that one shadow. */
+  --nibbles-cta-shadow: #5fa23f;
+
+  --nibbles-shadow: rgba(47, 71, 38, 0.12);
 }
 
 body {
@@ -102,6 +109,26 @@ body {
 }
 .progress-slider::-moz-range-track {
   background: transparent;
+}
+
+/* The mockup's distinctive "3D pressable" primary-button treatment: a
+   flat, non-blurred offset shadow that fakes a chunky raised edge, which
+   collapses to nothing as the button drops down by exactly its own
+   shadow height on press, simulating it being pushed flush into the
+   surface. Reserved for a screen's single primary CTA (per the mockup's
+   own split), secondary/outline buttons keep the plain active:scale-95
+   press feedback used everywhere else in this app. Rolling out to each
+   screen's primary action as that screen is touched, not a one-shot
+   global sweep. */
+.btn-cta {
+  box-shadow: 0 4px 0 var(--nibbles-cta-shadow);
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease;
+}
+.btn-cta:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--nibbles-cta-shadow);
 }
 
 /* A quick, satisfying bounce for the streak "mark today" button, more
