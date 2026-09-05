@@ -57,8 +57,8 @@ describe('discoverBooksForGenres', () => {
 
     const discovered = await discoverBooksForGenres(['fantasy', 'romance'], new Set())
 
-    expect(mockedSearch).toHaveBeenCalledWith('fantasy', 6)
-    expect(mockedSearch).toHaveBeenCalledWith('romance', 6)
+    expect(mockedSearch).toHaveBeenCalledWith('fantasy', 8)
+    expect(mockedSearch).toHaveBeenCalledWith('romance', 8)
     expect(discovered.map((b) => b.id)).toEqual(['b-fantasy-1', 'b-romance-1'])
   })
 
