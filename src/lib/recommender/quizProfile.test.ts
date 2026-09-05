@@ -10,6 +10,7 @@ function emptyAnswers(overrides: Partial<TasteQuizAnswers> = {}): TasteQuizAnswe
     fictionLean: null,
     favoriteBookIds: [],
     readingFrequency: null,
+    recencyPreference: null,
     ...overrides,
   }
 }

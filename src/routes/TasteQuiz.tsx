@@ -17,7 +17,7 @@ import {
 import type { TasteQuizAnswers } from '../lib/recommender/types'
 import type { Book } from '../types/database'
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 7
 const MAX_FAVORITE_BOOKS = 5
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -48,6 +48,8 @@ export function TasteQuiz() {
   const [fictionLean, setFictionLean] = useState<TasteQuizAnswers['fictionLean']>(null)
   const [favoriteBooks, setFavoriteBooks] = useState<Book[]>([])
   const [readingFrequency, setReadingFrequency] = useState<string | null>(null)
+  const [recencyPreference, setRecencyPreference] =
+    useState<TasteQuizAnswers['recencyPreference']>(null)
 
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -70,6 +72,7 @@ export function TasteQuiz() {
         setMoods(saved.moods)
         setFictionLean(saved.fictionLean)
         setReadingFrequency(saved.readingFrequency)
+        setRecencyPreference(saved.recencyPreference)
         if (saved.favoriteBookIds.length > 0) {
           const books = await Promise.all(saved.favoriteBookIds.map((id) => getBookById(id)))
           if (!cancelled) {
@@ -105,6 +108,7 @@ export function TasteQuiz() {
       fictionLean,
       favoriteBookIds: favoriteBooks.map((b) => b.id),
       readingFrequency,
+      recencyPreference,
     }
   }
 
@@ -240,6 +244,31 @@ export function TasteQuiz() {
       )}
 
       {step === 6 && (
+        <QuizStep
+          title="New releases, or old favorites?"
+          hint="This shapes which books we go find you outside your own shelf."
+          onNext={goNext}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['newer', 'mostly new releases'],
+                ['no-preference', 'no preference'],
+                ['classics', 'mostly classics'],
+              ] as const
+            ).map(([value, label]) => (
+              <ChipToggle
+                key={value}
+                label={label}
+                selected={recencyPreference === value}
+                onClick={() => setRecencyPreference(recencyPreference === value ? null : value)}
+              />
+            ))}
+          </div>
+        </QuizStep>
+      )}
+
+      {step === 7 && (
         <QuizStep title="How much are you reading lately?" onNext={() => void finish(false)} isLast>
           <div className="mb-6 flex flex-wrap gap-2">
             {QUIZ_READING_FREQUENCY_OPTIONS.map((option) => (

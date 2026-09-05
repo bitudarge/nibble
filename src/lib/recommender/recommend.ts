@@ -135,7 +135,11 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
   if (topGenres.length > 0) {
     try {
       const excludeIds = new Set([...excludedBookIds, ...candidates.map((book) => book.id)])
-      const discovered = await discoverBooksForGenres(topGenres, excludeIds)
+      const discovered = await discoverBooksForGenres(
+        topGenres,
+        excludeIds,
+        tasteProfile.quiz?.answers.recencyPreference,
+      )
       candidates.push(...discovered)
     } catch {
       // Discovery is a bonus signal on top of the existing catalog, not a
