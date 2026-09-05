@@ -13,6 +13,18 @@ export interface TasteQuizAnswers {
   favoriteBookIds: string[]
   /** Informational only (not scored) — see quizProfile.ts. */
   readingFrequency: string | null
+  /**
+   * Whether to lean toward brand-new releases or older/classic books
+   * when discovering candidates outside the existing catalog — see
+   * discovery.ts. `null` (unanswered) behaves the same as 'newer': Open
+   * Library's own default subject ranking skews heavily toward old
+   * public-domain classics (confirmed directly — the unsorted "fantasy"
+   * subject's top results are Alice in Wonderland, Gulliver's Travels,
+   * a Midsummer Night's Dream...), so defaulting to recent releases is
+   * the safer general fix for "all the recommended books are so old"
+   * rather than something that only helps someone who explicitly answers.
+   */
+  recencyPreference: 'newer' | 'no-preference' | 'classics' | null
 }
 
 /** The quiz's contribution to a taste profile: the raw answers (for re-editing) plus what they were turned into. */
