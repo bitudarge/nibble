@@ -11,6 +11,8 @@
  * where to add a key.
  */
 
+import { cleanDescription } from './textCleanup'
+
 export interface GoogleBooksDetails {
   description: string | null
   categories: string[]
@@ -98,7 +100,7 @@ export async function fetchGoogleBooksDetails(
     if (!info) return null
 
     return {
-      description: info.description ?? null,
+      description: cleanDescription(info.description),
       categories: info.categories ?? [],
       pageCount: info.pageCount ?? null,
       publishedYear: extractYear(info.publishedDate),
