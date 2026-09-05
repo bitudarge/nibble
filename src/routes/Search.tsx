@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth/useAuth'
 import { getOrCreateBook } from '../lib/books/data'
 import { searchOpenLibrary, type OpenLibrarySearchResult } from '../lib/books/openLibrary'
 import { getOrComputeTasteProfile } from '../lib/recommender'
+import { setShelfStatus } from '../lib/shelf/data'
 
 type LoadState = 'idle' | 'loading' | 'error' | 'loaded'
 
@@ -51,6 +52,11 @@ export function Search() {
   const [state, setState] = useState<LoadState>(initialQuery.trim() ? 'loading' : 'idle')
   const [error, setError] = useState<string | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
+  // Keyed by Open Library id rather than our own book id, since a raw
+  // search result has no book row (and no known shelf status) until
+  // someone actually acts on it — see handleQuickAdd.
+  const [addingId, setAddingId] = useState<string | null>(null)
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   // The bare genre tags ("fantasy", "sci-fi") from the user's taste quiz
   // answers, in the order they picked them — drives the personalized genre
   // shelves below the mood chips. Stays an empty array (no shelves render,
@@ -167,6 +173,25 @@ export function Search() {
     }
   }
 
+  // "Save for later" straight from a search/genre-shelf result, without
+  // leaving the page — matches the mockup's own status pill on each
+  // result card. Creates the book row the same way opening one does
+  // (getOrCreateBook is idempotent, so this is cheap even if the book
+  // already exists), then sets it want-to-read.
+  async function handleQuickAdd(result: OpenLibrarySearchResult) {
+    if (!user) return
+    setAddingId(result.openLibraryId)
+    try {
+      const book = await getOrCreateBook(result)
+      await setShelfStatus(user.id, book.id, 'want_to_read')
+      setAddedIds((prev) => new Set(prev).add(result.openLibraryId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add that book. Try again.')
+    } finally {
+      setAddingId(null)
+    }
+  }
+
   const trimmedQuery = query.trim()
   const showResultsArea = trimmedQuery.length > 0
 
@@ -213,6 +238,9 @@ export function Search() {
         genres={quizGenres}
         openingId={openingId}
         onSelect={(result) => void handleSelect(result)}
+        addedIds={addedIds}
+        addingId={addingId}
+        onQuickAdd={(result) => void handleQuickAdd(result)}
       />
 
       {!showResultsArea && (
@@ -249,41 +277,61 @@ export function Search() {
           className="grid grid-cols-2 gap-3.5 transition-opacity sm:grid-cols-3 md:grid-cols-4"
           style={{ opacity: state === 'loading' ? 0.6 : 1 }}
         >
-          {results.map((result) => (
-            <li key={result.openLibraryId}>
-              <button
-                type="button"
-                onClick={() => void handleSelect(result)}
-                disabled={openingId !== null}
-                className="flex w-full flex-col items-start gap-1 rounded-[22px] bg-surface p-2.5 text-left shadow-soft transition-transform active:scale-95 disabled:opacity-50"
+          {results.map((result) => {
+            const added = addedIds.has(result.openLibraryId)
+            return (
+              <li
+                key={result.openLibraryId}
+                className="rounded-[22px] bg-surface p-2.5 shadow-soft"
               >
-                {result.coverUrl ? (
-                  <img
-                    src={result.coverUrl}
-                    alt=""
-                    className="h-40 w-full rounded-[14px] object-cover"
-                  />
-                ) : (
-                  <div
-                    className="flex h-40 w-full items-center justify-center rounded-[14px] text-center font-sans text-xs text-muted"
-                    style={{
-                      background:
-                        'repeating-linear-gradient(135deg, #DCE8D3 0 7px, #F6FAF3 7px 14px)',
-                    }}
-                  >
-                    No cover yet
-                  </div>
-                )}
-                <span className="font-display text-sm font-semibold text-ink">{result.title}</span>
-                {result.author && (
-                  <span className="font-sans text-xs text-muted">{result.author}</span>
-                )}
-                {openingId === result.openLibraryId && (
-                  <span className="font-sans text-xs text-muted">Opening…</span>
-                )}
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => void handleSelect(result)}
+                  disabled={openingId !== null}
+                  className="flex w-full flex-col items-start gap-1 text-left transition-transform active:scale-95 disabled:opacity-50"
+                >
+                  {result.coverUrl ? (
+                    <img
+                      src={result.coverUrl}
+                      alt=""
+                      className="h-40 w-full rounded-[14px] object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-40 w-full items-center justify-center rounded-[14px] text-center font-sans text-xs text-muted"
+                      style={{
+                        background:
+                          'repeating-linear-gradient(135deg, #DCE8D3 0 7px, #F6FAF3 7px 14px)',
+                      }}
+                    >
+                      No cover yet
+                    </div>
+                  )}
+                  <span className="font-display text-sm font-semibold text-ink">
+                    {result.title}
+                  </span>
+                  {result.author && (
+                    <span className="font-sans text-xs text-muted">{result.author}</span>
+                  )}
+                  {openingId === result.openLibraryId && (
+                    <span className="font-sans text-xs text-muted">Opening…</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleQuickAdd(result)}
+                  disabled={added || addingId === result.openLibraryId}
+                  className="mt-2 w-full rounded-full border-2 border-line bg-surface py-1.5 font-sans text-xs font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-60"
+                >
+                  {added
+                    ? 'On your list ✓'
+                    : addingId === result.openLibraryId
+                      ? 'Saving…'
+                      : 'Save for later'}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
 
