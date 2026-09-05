@@ -292,7 +292,11 @@ export function CircleHome() {
           <p className="font-sans text-sm text-muted">No messages yet. Say hello.</p>
         ) : (
           <ul className="flex flex-col gap-2.5">
-            {messages.map((message) => {
+            {/* getCircleMessages orders newest-first (so a "most recent
+                50" limit keeps the right window), but a chat reads top to
+                bottom in the order it happened, like every normal
+                messaging app — reversed here for display only. */}
+            {[...messages].reverse().map((message) => {
               const isOwn = message.user_id === user?.id
               return (
                 <li
