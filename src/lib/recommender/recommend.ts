@@ -4,7 +4,7 @@ import type { Book } from '../../types/database'
 import { getBookTagProfiles } from './bookTagProfile'
 import { getCircleSignals } from './circleSignals'
 import { getDismissedBookIds } from './dismissals'
-import { discoverBooksForGenres } from './discovery'
+import { discoverBooksForGenres, discoverPopularBooks } from './discovery'
 import { NO_REASON_YET_MESSAGE, explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
 import type { CircleSignal, TasteProfileData } from './types'
@@ -147,6 +147,24 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     }
   }
 
+  // A few current bestsellers, regardless of the taste profile's own
+  // genre affinities — the owner asked for popular picks "in the mix...
+  // to create more diversity" rather than recommendations narrowing to
+  // only ever the same handful of favored genres. Tracked separately so
+  // one can still be shown even with no personal tag-match reason (see
+  // popularBookIds below) — being a current bestseller is itself an
+  // honest reason, not a black-box one.
+  const popularBookIds = new Set<string>()
+  try {
+    const excludeIds = new Set([...excludedBookIds, ...candidates.map((book) => book.id)])
+    const popular = await discoverPopularBooks(excludeIds)
+    for (const book of popular) popularBookIds.add(book.id)
+    candidates.push(...popular)
+  } catch {
+    // Same reasoning as genre discovery above: a bonus signal, not a hard
+    // dependency.
+  }
+
   if (candidates.length === 0) return []
 
   const candidateIds = candidates.map((book) => book.id)
@@ -159,7 +177,16 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     const tagProfile = tagProfiles.get(book.id) ?? { bookId: book.id, tagCounts: {} }
     const signals = circleSignals.get(book.id) ?? []
     const result = scoreBook(tasteProfile, tagProfile, signals)
-    return { book, score: result.score, why: explainScore(result), circleSignals: signals }
+    let why = explainScore(result)
+    // A bestseller pick that happens to also match the taste profile keeps
+    // its real, specific reason from explainScore above; one that doesn't
+    // gets this instead of being dropped by hasRealReason below — being a
+    // current bestseller is itself honest, non-fabricated signal, not the
+    // generic "we don't have a reason yet" filler that IS worth excluding.
+    if (!hasRealReason(why) && popularBookIds.has(book.id)) {
+      why = ['A current bestseller, worth a look even without a personal match yet.']
+    }
+    return { book, score: result.score, why, circleSignals: signals }
   })
 
   // The owner asked to never show the generic "we don't have a specific

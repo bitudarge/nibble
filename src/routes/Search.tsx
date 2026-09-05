@@ -133,6 +133,12 @@ export function Search() {
   // subject-browsing endpoint), not a title/author text match — clicking
   // "Fantasy" should show fantasy books, not books with "fantasy" in the
   // title. `genre` is one of the bare quiz tags, or ALL_CHIP.
+  //
+  // "All" specifically blends in current bestsellers alongside generic
+  // fiction — the owner asked for popular/bestseller books "in the mix...
+  // to create more diversity" rather than "All" just being one more
+  // genre-shaped shelf. A specific genre chip (Fantasy, Romance) stays
+  // genre-only: a bestseller unrelated to that genre wouldn't belong.
   function runGenreSearch(genre: string) {
     abortRef.current?.abort()
     const requestId = ++genreRequestIdRef.current
@@ -142,11 +148,24 @@ export function Search() {
     setError(null)
     setSearchParams({}, { replace: true })
 
-    const slug = genreTagToSubjectSlug(genre === ALL_CHIP ? 'fiction' : genre)
-    searchOpenLibraryBySubject(slug, 24, 'new')
-      .then((docs) => {
+    const searches =
+      genre === ALL_CHIP
+        ? [
+            searchOpenLibraryBySubject(genreTagToSubjectSlug('fiction'), 16, 'new'),
+            searchOpenLibraryBySubject('new_york_times_bestseller', 8, 'new'),
+          ]
+        : [searchOpenLibraryBySubject(genreTagToSubjectSlug(genre), 24, 'new')]
+
+    Promise.all(searches)
+      .then((resultSets) => {
         if (genreRequestIdRef.current !== requestId) return
-        setResults(docs)
+        const seen = new Set<string>()
+        const merged = resultSets.flat().filter((result) => {
+          if (seen.has(result.openLibraryId)) return false
+          seen.add(result.openLibraryId)
+          return true
+        })
+        setResults(merged)
         setState('loaded')
       })
       .catch((err: unknown) => {
