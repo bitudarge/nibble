@@ -33,7 +33,7 @@ describe('PrivateNoteSummary', () => {
         onShare={vi.fn()}
       />,
     )
-    expect(screen.getByText('Loved the ending.')).toBeInTheDocument()
+    expect(screen.getByText('“Loved the ending.”')).toBeInTheDocument()
     expect(screen.getByText('cozy')).toBeInTheDocument()
   })
 
@@ -50,7 +50,7 @@ describe('PrivateNoteSummary', () => {
     expect(screen.getByText('Tagged, no note written this time.')).toBeInTheDocument()
   })
 
-  it('calls onEdit when Edit is tapped', () => {
+  it('calls onEdit when the edit button is tapped', () => {
     const onEdit = vi.fn()
     render(
       <PrivateNoteSummary
@@ -61,7 +61,7 @@ describe('PrivateNoteSummary', () => {
         onShare={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByText('Edit'))
+    fireEvent.click(screen.getByLabelText('Edit this note'))
     expect(onEdit).toHaveBeenCalled()
   })
 
@@ -75,10 +75,10 @@ describe('PrivateNoteSummary', () => {
         onShare={vi.fn()}
       />,
     )
-    expect(screen.queryByLabelText('Circle to share this with')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sunday Sofa')).not.toBeInTheDocument()
   })
 
-  it('shares the review body to the selected circle', async () => {
+  it('shares the review body to whichever circle chip is tapped', async () => {
     const onShare = vi.fn().mockResolvedValue(undefined)
     render(
       <PrivateNoteSummary
@@ -89,10 +89,7 @@ describe('PrivateNoteSummary', () => {
         onShare={onShare}
       />,
     )
-    fireEvent.change(screen.getByLabelText('Circle to share this with'), {
-      target: { value: 'c1' },
-    })
-    fireEvent.click(screen.getByText('Share'))
+    fireEvent.click(screen.getByText('Sunday Sofa'))
     expect(onShare).toHaveBeenCalledWith('c1', 'Loved the ending.')
   })
 })

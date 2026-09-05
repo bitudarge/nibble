@@ -4,10 +4,10 @@ import { BareRatingRow } from '../components/book/BareRatingRow'
 import { BookHero } from '../components/book/BookHero'
 import { FirstRatingExperience } from '../components/book/FirstRatingExperience'
 import { PrivateNoteSummary } from '../components/book/PrivateNoteSummary'
-import { ProgressControl } from '../components/book/ProgressControl'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
 import { useCelebration } from '../components/celebrate/useCelebration'
+import { PageLogSheet } from '../components/dashboard/PageLogSheet'
 import { useAuth } from '../lib/auth/useAuth'
 import { enrichBook, getBookById } from '../lib/books/data'
 import {
@@ -35,7 +35,7 @@ import {
   shareReviewToCircle,
 } from '../lib/reviews/data'
 import { logReadingProgress } from '../lib/sessions/data'
-import { getShelfItemForBook, setShelfStatus } from '../lib/shelf/data'
+import { getShelfItemForBook, setShelfStatus, type ShelfItemWithBook } from '../lib/shelf/data'
 import { getAllTags, getTagsForReview, setReviewTags } from '../lib/tags/data'
 import type { Book, BookTag, Circle, Review, ShelfItem, ShelfStatus } from '../types/database'
 
@@ -83,6 +83,7 @@ export function BookPage() {
   const [addingToCircleId, setAddingToCircleId] = useState<string | null>(null)
 
   const [progressError, setProgressError] = useState<string | null>(null)
+  const [logSheetOpen, setLogSheetOpen] = useState(false)
 
   // The immersive first-rating flow: shown right after rating, only while
   // the user has no private note yet for this book (once they save one,
@@ -120,6 +121,7 @@ export function BookPage() {
       setShowFirstRatingFlow(false)
       setFirstRatingError(null)
       setActiveTab('about')
+      setLogSheetOpen(false)
       try {
         const foundBook = await getBookById(bookId)
         if (!foundBook) {
@@ -416,14 +418,33 @@ export function BookPage() {
 
             {shelfItem?.status === 'reading' && (
               <div className="rounded-[22px] bg-surface p-4 shadow-soft">
-                <h2 className="mb-3 font-display text-base font-semibold text-ink">
-                  Your progress
-                </h2>
-                <ProgressControl
-                  currentPage={shelfItem.current_page ?? 0}
-                  pageCount={book.page_count}
-                  onSave={(page) => handleLogProgress(page)}
-                />
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-display text-base font-semibold text-ink">Your progress</h2>
+                  {book.page_count && (
+                    <span className="font-sans text-xs font-bold text-muted">
+                      page {shelfItem.current_page ?? 0} of {book.page_count}
+                    </span>
+                  )}
+                </div>
+                {book.page_count && (
+                  <div className="mb-4 h-3 overflow-hidden rounded-full bg-tint">
+                    <div
+                      className="h-full rounded-full transition-[width] duration-500 ease-out"
+                      style={{
+                        width: `${Math.min(100, Math.round(((shelfItem.current_page ?? 0) / book.page_count) * 100))}%`,
+                        background:
+                          'linear-gradient(90deg, var(--nibbles-sage-deep), var(--nibbles-sage))',
+                      }}
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setLogSheetOpen(true)}
+                  className="btn-cta w-full rounded-full bg-sage py-2.5 font-sans text-sm font-bold text-surface"
+                >
+                  Move my bookmark
+                </button>
               </div>
             )}
 
@@ -450,6 +471,15 @@ export function BookPage() {
             <p className="mt-2 font-sans text-sm text-honey-text">{progressError}</p>
           )}
         </div>
+      )}
+
+      {logSheetOpen && shelfItem && (
+        <PageLogSheet
+          items={[{ ...shelfItem, books: book } satisfies ShelfItemWithBook]}
+          initialItemId={shelfItem.id}
+          onClose={() => setLogSheetOpen(false)}
+          onSave={(_item, toPage) => handleLogProgress(toPage)}
+        />
       )}
 
       {activeTab === 'circle' && (

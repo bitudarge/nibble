@@ -65,7 +65,12 @@ export function BookHero({
         <StarRating value={myRating} onChange={onRatingChange} />
       </div>
 
-      {(description || categories.length > 0) && (
+      {/* Shows whenever there's anything at all to say about the book —
+          not just when there's a synopsis — so a book Google Books and
+          Open Library both came up empty on still shows its own known
+          facts (pages, year, average) rather than the whole card
+          vanishing. */}
+      {(description || categories.length > 0 || pageCount || publishedYear) && (
         <div className="mt-5 w-full rounded-[26px] bg-surface p-4 text-left shadow-soft">
           <h2 className="mb-2 font-display text-base font-semibold text-ink">About this book</h2>
           {categories.length > 0 && (
@@ -80,9 +85,37 @@ export function BookHero({
               ))}
             </div>
           )}
-          {description && (
+          {description ? (
             <p className="font-sans text-sm leading-relaxed text-ink">{description}</p>
+          ) : (
+            <p className="font-sans text-sm text-muted">No synopsis found for this one yet.</p>
           )}
+          <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3.5 text-center">
+            <div>
+              <div className="font-display text-base font-semibold text-ink">
+                {publishedYear ?? '—'}
+              </div>
+              <div className="mt-0.5 font-sans text-[10.5px] font-bold tracking-wide text-muted uppercase">
+                First published
+              </div>
+            </div>
+            <div>
+              <div className="font-display text-base font-semibold text-ink">
+                {pageCount ?? '—'}
+              </div>
+              <div className="mt-0.5 font-sans text-[10.5px] font-bold tracking-wide text-muted uppercase">
+                Pages
+              </div>
+            </div>
+            <div>
+              <div className="font-display text-base font-semibold text-ink">
+                {aggregateLabel.startsWith('★') ? aggregateLabel.split(' ')[1] : '—'}
+              </div>
+              <div className="mt-0.5 font-sans text-[10.5px] font-bold tracking-wide text-muted uppercase">
+                Average
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
