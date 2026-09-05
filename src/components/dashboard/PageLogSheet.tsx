@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { BookCover } from '../book/BookCover'
-import { useBodyScrollLock } from '../../lib/useBodyScrollLock'
 import type { ShelfItemWithBook } from '../../lib/shelf/data'
 
 type View = 'picker' | 'slider'
@@ -14,6 +13,16 @@ type View = 'picker' | 'slider'
  * drag-release/keyup auto-commit unreliable, so dragging here is purely
  * local state until "Save my place" is pressed. A direct number field
  * sits alongside the slider for typing an exact page instead of dragging.
+ *
+ * Deliberately does NOT lock the page behind it from scrolling. Two
+ * earlier attempts at that (a plain `overflow: hidden`, then pinning
+ * `<body>` with `position: fixed`) both read as the sheet "getting stuck"
+ * on the owner's real phone — likely each fighting the mobile browser's
+ * own touch/scroll handling in its own way. The owner explicitly asked
+ * for it to work "like the original where it pops from the bottom and
+ * people can scroll," so this sheet is a plain fixed-position overlay:
+ * the backdrop and sheet scroll independently of the page underneath,
+ * and the page underneath is simply left free to scroll.
  */
 export function PageLogSheet({
   items,
@@ -38,12 +47,6 @@ export function PageLogSheet({
   const [pageInput, setPageInput] = useState(String(initial?.current_page ?? 0))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Locks the page underneath while the sheet is open — see
-  // useBodyScrollLock's own comment for why a plain `overflow: hidden`
-  // (the first attempt at this) isn't reliable on iOS Safari and read as
-  // the sheet "getting stuck."
-  useBodyScrollLock()
 
   function selectItem(item: ShelfItemWithBook) {
     setSelected(item)
