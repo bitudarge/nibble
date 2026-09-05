@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BookCover } from '../book/BookCover'
+import { useBodyScrollLock } from '../../lib/useBodyScrollLock'
 import type { ShelfItemWithBook } from '../../lib/shelf/data'
 
 type View = 'picker' | 'slider'
@@ -38,19 +39,11 @@ export function PageLogSheet({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Locks the page underneath while the sheet is open. Without this, a
-  // touch-drag anywhere over the backdrop on mobile could scroll the
-  // Home page behind it instead of just the sheet, which is what made
-  // reaching Save feel like "having to scroll all the way down" — the
-  // sheet itself was already correctly sized and positioned, the
-  // background was the thing moving.
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = previousOverflow
-    }
-  }, [])
+  // Locks the page underneath while the sheet is open — see
+  // useBodyScrollLock's own comment for why a plain `overflow: hidden`
+  // (the first attempt at this) isn't reliable on iOS Safari and read as
+  // the sheet "getting stuck."
+  useBodyScrollLock()
 
   function selectItem(item: ShelfItemWithBook) {
     setSelected(item)
