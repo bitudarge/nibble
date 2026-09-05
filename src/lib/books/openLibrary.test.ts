@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { searchOpenLibraryBySubject } from './openLibrary'
+import { fetchOpenLibraryWorkDetails, searchOpenLibraryBySubject } from './openLibrary'
 
 function jsonResponse(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response
@@ -69,5 +69,54 @@ describe('searchOpenLibraryBySubject', () => {
     await expect(searchOpenLibraryBySubject('horror')).rejects.toThrow(
       'Open Library subject lookup failed (500).',
     )
+  })
+})
+
+describe('fetchOpenLibraryWorkDetails', () => {
+  it('returns a plain-string description and the subject list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          description: 'A house with infinite rooms.',
+          subjects: ['Fantasy fiction', 'Magic'],
+        }),
+      ),
+    )
+    expect(await fetchOpenLibraryWorkDetails('/works/OL1W')).toEqual({
+      description: 'A house with infinite rooms.',
+      subjects: ['Fantasy fiction', 'Magic'],
+    })
+  })
+
+  it('unwraps the older {value} description shape', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          description: { value: 'Older-shape synopsis.' },
+          subjects: [],
+        }),
+      ),
+    )
+    expect(await fetchOpenLibraryWorkDetails('/works/OL2W')).toEqual({
+      description: 'Older-shape synopsis.',
+      subjects: [],
+    })
+  })
+
+  it('returns null when there is neither a description nor subjects', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})))
+    expect(await fetchOpenLibraryWorkDetails('/works/OL3W')).toBeNull()
+  })
+
+  it('returns null rather than throwing on a failed request', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false)))
+    expect(await fetchOpenLibraryWorkDetails('/works/OL4W')).toBeNull()
+  })
+
+  it('returns null rather than throwing on a network error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    expect(await fetchOpenLibraryWorkDetails('/works/OL5W')).toBeNull()
   })
 })
