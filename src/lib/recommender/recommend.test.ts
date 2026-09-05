@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { hasCircleSignal, needsFallback, topGenreAffinities } from './recommend'
+import { NO_REASON_YET_MESSAGE } from './scoring'
+import { hasCircleSignal, hasRealReason, needsFallback, topGenreAffinities } from './recommend'
 import type { CircleSignal, TasteProfileData } from './types'
 
 function profile(overrides: Partial<TasteProfileData> = {}): TasteProfileData {
@@ -76,5 +77,23 @@ describe('hasCircleSignal', () => {
         circleSignals: [aSignal, { memberName: 'Alex', stars: 2, overlap: 0 }],
       }),
     ).toBe(true)
+  })
+})
+
+describe('hasRealReason', () => {
+  it('is false when the only reason is the generic no-signal filler', () => {
+    expect(hasRealReason([NO_REASON_YET_MESSAGE])).toBe(false)
+  })
+
+  it('is true for a real tag- or circle-derived reason', () => {
+    expect(hasRealReason(['You said you like cozy mysteries.'])).toBe(true)
+  })
+
+  it('is true when a real reason sits alongside the filler somehow', () => {
+    expect(hasRealReason(['You said you like cozy mysteries.', NO_REASON_YET_MESSAGE])).toBe(true)
+  })
+
+  it('is false for an empty reasons list', () => {
+    expect(hasRealReason([])).toBe(false)
   })
 })
