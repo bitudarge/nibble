@@ -6,7 +6,6 @@ import type {
   CircleMessage,
   CircleRead,
   Profile,
-  Review,
   ShelfItem,
 } from '../../types/database'
 
@@ -49,6 +48,19 @@ export async function getCircleById(circleId: string): Promise<Circle | null> {
   return data as Circle | null
 }
 
+/** Powered by the existing owner-only `circles_update_owner` RLS policy — no new migration needed. */
+export async function renameCircle(circleId: string, name: string): Promise<Circle> {
+  const db = requireSupabase()
+  const { data, error } = await db
+    .from('circles')
+    .update({ name })
+    .eq('id', circleId)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data as Circle
+}
+
 export interface CircleMemberWithProfile extends CircleMember {
   profiles: Profile
 }
@@ -62,6 +74,20 @@ export async function getCircleMembers(circleId: string): Promise<CircleMemberWi
     .order('joined_at')
   if (error) throw error
   return (data ?? []) as unknown as CircleMemberWithProfile[]
+}
+
+/**
+ * Removes someone else from a circle — powered by the owner-only
+ * `circle_members_delete_owner` RLS policy (migration
+ * `20260905000002_circle_group_management.sql`), the same admin-only
+ * asymmetry a normal group chat's "remove member" has. A member removing
+ * themselves is the separate, already-existing "leave" action
+ * (`circle_members_delete_self`), not this function.
+ */
+export async function removeCircleMember(memberRowId: string): Promise<void> {
+  const db = requireSupabase()
+  const { error } = await db.from('circle_members').delete().eq('id', memberRowId)
+  if (error) throw error
 }
 
 export interface CircleMessageWithAuthor extends CircleMessage {
@@ -95,22 +121,6 @@ export async function postCircleMessage(
     .single()
   if (error) throw error
   return data as CircleMessage
-}
-
-export interface CircleReviewWithDetails extends Review {
-  profiles: Profile
-  books: Book
-}
-
-export async function getCircleReviews(circleId: string): Promise<CircleReviewWithDetails[]> {
-  const db = requireSupabase()
-  const { data, error } = await db
-    .from('reviews')
-    .select('*, profiles(*), books(*)')
-    .eq('circle_id', circleId)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data ?? []) as unknown as CircleReviewWithDetails[]
 }
 
 export interface CircleReadWithBook extends CircleRead {
@@ -147,6 +157,18 @@ export async function startCircleRead(
     .single()
   if (error) throw error
   return data as CircleRead
+}
+
+/**
+ * Drops a book from "reading together" once the circle's done with it —
+ * powered by the `circle_reads_delete_member` RLS policy (migration
+ * `20260905000002_circle_group_management.sql`), open to any member, the
+ * same scope the existing update policy already had.
+ */
+export async function removeCircleRead(circleReadId: string): Promise<void> {
+  const db = requireSupabase()
+  const { error } = await db.from('circle_reads').delete().eq('id', circleReadId)
+  if (error) throw error
 }
 
 export interface MemberProgress extends ShelfItem {
