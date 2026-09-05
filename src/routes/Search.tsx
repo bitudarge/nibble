@@ -133,6 +133,12 @@ export function Search() {
   // subject-browsing endpoint), not a title/author text match — clicking
   // "Fantasy" should show fantasy books, not books with "fantasy" in the
   // title. `genre` is one of the bare quiz tags, or ALL_CHIP.
+  //
+  // "All" specifically blends in current bestsellers alongside generic
+  // fiction — the owner asked for popular/bestseller books "in the mix...
+  // to create more diversity" rather than "All" just being one more
+  // genre-shaped shelf. A specific genre chip (Fantasy, Romance) stays
+  // genre-only: a bestseller unrelated to that genre wouldn't belong.
   function runGenreSearch(genre: string) {
     abortRef.current?.abort()
     const requestId = ++genreRequestIdRef.current
@@ -142,11 +148,24 @@ export function Search() {
     setError(null)
     setSearchParams({}, { replace: true })
 
-    const slug = genreTagToSubjectSlug(genre === ALL_CHIP ? 'fiction' : genre)
-    searchOpenLibraryBySubject(slug, 24)
-      .then((docs) => {
+    const searches =
+      genre === ALL_CHIP
+        ? [
+            searchOpenLibraryBySubject(genreTagToSubjectSlug('fiction'), 16, 'new'),
+            searchOpenLibraryBySubject('new_york_times_bestseller', 8, 'new'),
+          ]
+        : [searchOpenLibraryBySubject(genreTagToSubjectSlug(genre), 24, 'new')]
+
+    Promise.all(searches)
+      .then((resultSets) => {
         if (genreRequestIdRef.current !== requestId) return
-        setResults(docs)
+        const seen = new Set<string>()
+        const merged = resultSets.flat().filter((result) => {
+          if (seen.has(result.openLibraryId)) return false
+          seen.add(result.openLibraryId)
+          return true
+        })
+        setResults(merged)
         setState('loaded')
       })
       .catch((err: unknown) => {
@@ -160,14 +179,19 @@ export function Search() {
       })
   }
 
-  // Run once on mount, for a deep link like /search?q=circe. Not part of
-  // scheduleSearch's dependency chain since it should only ever fire once.
-  // The search itself is kicked off from a microtask (not the effect body
-  // directly) so the resulting setState calls are treated as coming from
-  // a callback, not synchronously from the effect.
+  // Run once on mount, for a deep link like /search?q=circe — or, with no
+  // query, land on the "All" genre shelf instead of an empty "type
+  // something" placeholder. The owner said Discover "isn't working" when
+  // it opens to nothing and asked for it to default to All, and an empty
+  // landing state reads as broken even though nothing's actually wrong.
+  // Not part of scheduleSearch's dependency chain since it should only
+  // ever fire once. The search itself is kicked off from a microtask (not
+  // the effect body directly) so the resulting setState calls are treated
+  // as coming from a callback, not synchronously from the effect.
   useEffect(() => {
     const trimmed = initialQuery.trim()
     if (trimmed) void Promise.resolve().then(() => runSearch(trimmed))
+    else void Promise.resolve().then(() => handleChipClick(ALL_CHIP))
     return () => {
       if (debounceRef.current) window.clearTimeout(debounceRef.current)
       abortRef.current?.abort()
