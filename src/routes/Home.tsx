@@ -553,17 +553,33 @@ export function Home() {
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {circleActivity.map((message) => (
+            {circleActivity.map((item) => (
               <li
-                key={message.id}
+                key={`${item.kind}-${item.id}`}
                 className="flex items-start gap-3 rounded-[20px] bg-surface p-3.5 shadow-soft"
               >
                 <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-leaf font-sans text-xs font-extrabold text-on-leaf">
-                  {message.profiles.display_name.charAt(0).toUpperCase()}
+                  {item.displayName.charAt(0).toUpperCase()}
                 </div>
                 <p className="font-sans text-sm text-muted">
-                  <span className="font-extrabold text-ink">{message.profiles.display_name}</span>{' '}
-                  in {message.circle_name}: {message.body}
+                  <span className="font-extrabold text-ink">{item.displayName}</span>{' '}
+                  {item.kind === 'finished' ? (
+                    <>
+                      finished{' '}
+                      <Link to={`/book/${item.bookId}`} className="font-bold text-sage-deep">
+                        {item.bookTitle}
+                      </Link>{' '}
+                      in {item.circleName}.
+                    </>
+                  ) : (
+                    <>
+                      in {item.circleName}, on{' '}
+                      <Link to={`/book/${item.bookId}`} className="font-bold text-sage-deep">
+                        {item.bookTitle}
+                      </Link>
+                      : {item.body}
+                    </>
+                  )}
                 </p>
               </li>
             ))}

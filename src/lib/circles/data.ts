@@ -164,26 +164,87 @@ export async function getMemberProgressForBook(bookId: string): Promise<MemberPr
   return (data ?? []) as unknown as MemberProgress[]
 }
 
-export interface RecentCircleActivity extends CircleMessage {
-  profiles: Profile
-  circle_name: string
-}
+/**
+ * A single notification-style item for the Home "Circle activity" feed —
+ * either a member finishing a book, or a chat message that actually
+ * references one (a real "book moment"), never plain freeform chatter.
+ * The owner asked for "recent notifications, not everything that is
+ * said" — showing raw message text for every line typed in a circle read
+ * as a live chat transcript sitting on the dashboard, not a set of
+ * distinct, skimmable events. A discriminated union keeps the two event
+ * shapes honest rather than forcing a "message-shaped" object to also
+ * represent a finish.
+ */
+export type RecentCircleActivity =
+  | {
+      kind: 'finished'
+      id: string
+      createdAt: string
+      circleName: string
+      displayName: string
+      bookId: string
+      bookTitle: string
+    }
+  | {
+      kind: 'message'
+      id: string
+      createdAt: string
+      circleName: string
+      displayName: string
+      body: string
+      bookId: string
+      bookTitle: string
+    }
 
-/** Light cross-circle feed for the Dashboard — most recent messages across all the user's circles. */
+/**
+ * Light cross-circle notifications feed for the Dashboard: recent
+ * finishes and book-referencing messages across all the user's circles,
+ * newest first. Deliberately excludes plain chat with no book attached —
+ * that's real conversation, not a notification, and belongs in the
+ * circle's own Discussion feed, not summarized on Home.
+ */
 export async function getRecentCircleActivity(userId: string): Promise<RecentCircleActivity[]> {
   const circles = await getMyCircles(userId)
   if (circles.length === 0) return []
 
   const perCircle = await Promise.all(
     circles.map(async (circle) => {
-      const messages = await getCircleMessages(circle.id)
-      return messages.slice(0, 5).map((m) => ({ ...m, circle_name: circle.name }))
+      const [showcase, messages] = await Promise.all([
+        getCircleShowcase(circle.id),
+        getCircleMessages(circle.id),
+      ])
+
+      const finishes: RecentCircleActivity[] = showcase.slice(0, 5).map((item) => ({
+        kind: 'finished',
+        id: item.id,
+        createdAt: item.finished_at ?? item.updated_at,
+        circleName: circle.name,
+        displayName: item.profiles.display_name,
+        bookId: item.book_id,
+        bookTitle: item.books.title,
+      }))
+
+      const bookMoments: RecentCircleActivity[] = messages
+        .filter((m) => m.book_id && m.books)
+        .slice(0, 5)
+        .map((m) => ({
+          kind: 'message',
+          id: m.id,
+          createdAt: m.created_at,
+          circleName: circle.name,
+          displayName: m.profiles.display_name,
+          body: m.body,
+          bookId: m.book_id!,
+          bookTitle: m.books!.title,
+        }))
+
+      return [...finishes, ...bookMoments]
     }),
   )
 
   return perCircle
     .flat()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5)
 }
 
