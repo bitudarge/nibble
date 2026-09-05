@@ -58,7 +58,14 @@ export async function setShelfStatus(
 
   const patch: { user_id: string; book_id: string; status: ShelfStatus } & Record<string, unknown> =
     { user_id: userId, book_id: bookId, status }
-  if (status === 'reading') patch.started_at = new Date().toISOString()
+  if (status === 'reading') {
+    patch.started_at = new Date().toISOString()
+    // Covers "read again" from finished as much as a fresh start from
+    // want-to-read: without this, re-reading a finished book would open
+    // straight back up at its old 100%-complete page instead of page 0.
+    patch.current_page = 0
+    patch.percent_complete = 0
+  }
   if (status === 'finished') patch.finished_at = new Date().toISOString()
 
   const { data, error } = await db

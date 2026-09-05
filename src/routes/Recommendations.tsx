@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
 import { useAuth } from '../lib/auth/useAuth'
-import { getRecommendations, hasCircleSignal, type Recommendation } from '../lib/recommender'
+import {
+  dismissRecommendation,
+  getRecommendations,
+  hasCircleSignal,
+  type Recommendation,
+} from '../lib/recommender'
 import { setShelfStatus } from '../lib/shelf/data'
 import type { Book } from '../types/database'
 
@@ -100,6 +105,21 @@ export function Recommendations() {
       setAddedBookIds((prev) => new Set(prev).add(bookId))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add that book. Try again.')
+    }
+  }
+
+  // A real, persisted dismissal (see dismissRecommendation's doc comment)
+  // — removed from view immediately, and excluded from every future
+  // getRecommendations call for this user, not just this session.
+  async function handleDismiss(bookId: string) {
+    if (!user) return
+    const previous = recommendations
+    setRecommendations((prev) => prev.filter((rec) => rec.book.id !== bookId))
+    try {
+      await dismissRecommendation(user.id, bookId)
+    } catch (err) {
+      setRecommendations(previous)
+      setError(err instanceof Error ? err.message : 'Could not dismiss that. Try again.')
     }
   }
 
@@ -204,14 +224,26 @@ export function Recommendations() {
                     {rec.book.author && (
                       <p className="mt-0.5 mb-2 font-sans text-xs text-muted">{rec.book.author}</p>
                     )}
-                    <ul className="flex flex-col gap-1.5">
-                      {rec.why.map((reason) => (
-                        <li key={reason} className="flex items-start gap-1.5">
-                          <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-sage" />
-                          <span className="font-sans text-[13px] text-ink">{reason}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    {/* The first reason reads as the headline "why this
+                        pick" line (bold, green), matching the round 4
+                        mockup's own picks card — the rest are supporting
+                        bullets. Same data, just the first one styled to
+                        carry more weight. */}
+                    {rec.why[0] && (
+                      <p className="mb-1.5 font-sans text-[13px] font-bold text-sage-deep">
+                        {rec.why[0]}
+                      </p>
+                    )}
+                    {rec.why.length > 1 && (
+                      <ul className="flex flex-col gap-1.5">
+                        {rec.why.slice(1).map((reason) => (
+                          <li key={reason} className="flex items-start gap-1.5">
+                            <span className="mt-1.5 h-1.5 w-1.5 flex-none rounded-full bg-sage" />
+                            <span className="font-sans text-[13px] text-ink">{reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
                     {/* The fallback case has no real "why", so lean on the
                         book's own Google Books data instead, so a
@@ -220,14 +252,23 @@ export function Recommendations() {
                     {rec.isFallback && <FallbackBookInfo book={rec.book} />}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void handleAddToWantToRead(rec.book.id)}
-                  disabled={added}
-                  className="mt-3.5 w-full rounded-full border-2 border-line bg-surface py-2.5 font-sans text-sm font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-60"
-                >
-                  {added ? 'On your want to read list' : 'Add to want to read'}
-                </button>
+                <div className="mt-3.5 flex gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleAddToWantToRead(rec.book.id)}
+                    disabled={added}
+                    className="btn-cta flex-1 rounded-full bg-sage py-2.5 font-sans text-sm font-extrabold text-surface disabled:opacity-60"
+                  >
+                    {added ? 'On your list' : 'Save for later'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDismiss(rec.book.id)}
+                    className="flex-1 rounded-full border-2 border-line bg-surface py-2.5 font-sans text-sm font-extrabold text-ink transition-transform active:scale-95"
+                  >
+                    Not for me
+                  </button>
+                </div>
               </li>
             )
           })}
