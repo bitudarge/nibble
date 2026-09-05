@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchOpenLibraryWorkDetails, searchOpenLibraryBySubject } from './openLibrary'
+import {
+  fetchOpenLibraryPageCount,
+  fetchOpenLibraryWorkDetails,
+  searchOpenLibraryBySubject,
+} from './openLibrary'
 
 function jsonResponse(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) } as Response
@@ -118,5 +122,70 @@ describe('fetchOpenLibraryWorkDetails', () => {
   it('returns null rather than throwing on a network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
     expect(await fetchOpenLibraryWorkDetails('/works/OL5W')).toBeNull()
+  })
+})
+
+describe('fetchOpenLibraryPageCount', () => {
+  it('prefers the most common page count among English-language editions', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          entries: [
+            { number_of_pages: 774, languages: [{ key: '/languages/ger' }] },
+            { number_of_pages: 759, languages: [{ key: '/languages/eng' }] },
+            { number_of_pages: 759, languages: [{ key: '/languages/eng' }] },
+            { number_of_pages: 320, languages: [{ key: '/languages/eng' }] },
+          ],
+        }),
+      ),
+    )
+    expect(await fetchOpenLibraryPageCount('/works/OL1W')).toBe(759)
+  })
+
+  it('treats an edition with no languages field as English', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          entries: [
+            { number_of_pages: 300 },
+            { number_of_pages: 774, languages: [{ key: '/languages/ger' }] },
+          ],
+        }),
+      ),
+    )
+    expect(await fetchOpenLibraryPageCount('/works/OL2W')).toBe(300)
+  })
+
+  it('falls back to the mode across every edition when none are English', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          entries: [
+            { number_of_pages: 590, languages: [{ key: '/languages/por' }] },
+            { number_of_pages: 590, languages: [{ key: '/languages/spa' }] },
+            { number_of_pages: 678, languages: [{ key: '/languages/ita' }] },
+          ],
+        }),
+      ),
+    )
+    expect(await fetchOpenLibraryPageCount('/works/OL3W')).toBe(590)
+  })
+
+  it('returns null when no edition has a usable page count', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ entries: [{}, {}] })))
+    expect(await fetchOpenLibraryPageCount('/works/OL4W')).toBeNull()
+  })
+
+  it('returns null rather than throwing on a failed request', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false)))
+    expect(await fetchOpenLibraryPageCount('/works/OL5W')).toBeNull()
+  })
+
+  it('returns null rather than throwing on a network error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+    expect(await fetchOpenLibraryPageCount('/works/OL6W')).toBeNull()
   })
 })
