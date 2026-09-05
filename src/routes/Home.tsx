@@ -5,7 +5,7 @@ import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { PageLogSheet } from '../components/dashboard/PageLogSheet'
 import { ProgressRing } from '../components/dashboard/ProgressRing'
-import { CirclesIcon, RecsIcon } from '../components/layout/navIcons'
+import { CirclesIcon, RecsIcon, StreakIcon } from '../components/layout/navIcons'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
 import {
@@ -398,10 +398,22 @@ export function Home() {
 
       <div className="rounded-[30px] bg-surface p-4.5 shadow-soft">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">Your goals</h2>
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">Your goals</h2>
+            {/* Tapping today's leaf below only felt worth doing if it's
+                visibly connected to something — the streak count used to
+                live in a card of its own that got removed, leaving the
+                leaf row with no number to actually show for a tap. */}
+            {streak && streak.current_streak > 0 && (
+              <div className="mt-0.5 flex items-center gap-1 font-sans text-[12.5px] font-bold text-sage-deep">
+                <StreakIcon />
+                {streak.current_streak} day{streak.current_streak === 1 ? '' : 's'} in a row
+              </div>
+            )}
+          </div>
           <Link
             to="/wrap"
-            className="font-sans text-[12.5px] font-extrabold text-sage-deep transition-opacity active:opacity-60"
+            className="flex-none font-sans text-[12.5px] font-extrabold text-sage-deep transition-opacity active:opacity-60"
           >
             Adjust
           </Link>

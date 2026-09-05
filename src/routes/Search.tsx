@@ -19,10 +19,10 @@ type LoadState = 'idle' | 'loading' | 'error' | 'loaded'
 // a request per keystroke.
 const DEBOUNCE_MS = 300
 
-// Shown instead of genre chips for anyone who hasn't picked any genres on
-// the taste quiz yet — a single honest "browse something popular" option
-// rather than guessing at moods nobody told us they like.
-const POPULAR_CHIP = 'popular'
+// Always the first chip, alongside whatever quiz-genre chips the user
+// has — a broad "show me anything" option for browsing outside your own
+// picked genres, not just a fallback for someone with no quiz answers.
+const ALL_CHIP = 'all'
 
 function isAbortError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'name' in err && err.name === 'AbortError'
@@ -65,11 +65,11 @@ export function Search() {
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   // The bare genre tags ("fantasy", "sci-fi") from the user's taste quiz
   // answers, in the order they picked them — drives the filter chips below
-  // the search box. Stays an empty array for anyone who hasn't taken the
-  // quiz yet, or if the profile fails to load for any reason (falls back
-  // to a single "Popular" chip in that case, see genreChips below): this
-  // is a nice-to-have on top of a working search page, not something
-  // worth showing a scary error for.
+  // the search box, alongside the always-present "All" chip (see
+  // genreChips below). Stays an empty array for anyone who hasn't taken
+  // the quiz yet, or if the profile fails to load for any reason: this is
+  // a nice-to-have on top of a working search page, not something worth
+  // showing a scary error for.
   const [quizGenres, setQuizGenres] = useState<string[]>([])
   // Which genre chip (if any) produced the results currently on screen —
   // distinct from `query`, which chip clicks also set (to the chip's
@@ -132,7 +132,7 @@ export function Search() {
   // Genre chips search real books in that genre (Open Library's
   // subject-browsing endpoint), not a title/author text match — clicking
   // "Fantasy" should show fantasy books, not books with "fantasy" in the
-  // title. `genre` is one of the bare quiz tags, or POPULAR_CHIP.
+  // title. `genre` is one of the bare quiz tags, or ALL_CHIP.
   function runGenreSearch(genre: string) {
     abortRef.current?.abort()
     const requestId = ++genreRequestIdRef.current
@@ -142,7 +142,7 @@ export function Search() {
     setError(null)
     setSearchParams({}, { replace: true })
 
-    const slug = genreTagToSubjectSlug(genre === POPULAR_CHIP ? 'fiction' : genre)
+    const slug = genreTagToSubjectSlug(genre === ALL_CHIP ? 'fiction' : genre)
     searchOpenLibraryBySubject(slug, 24)
       .then((docs) => {
         if (genreRequestIdRef.current !== requestId) return
@@ -206,7 +206,7 @@ export function Search() {
   }
 
   function handleChipClick(genre: string) {
-    setQuery(genre === POPULAR_CHIP ? 'Popular' : genreLabelFor(genre))
+    setQuery(genre === ALL_CHIP ? 'All' : genreLabelFor(genre))
     runGenreSearch(genre)
   }
 
@@ -242,10 +242,10 @@ export function Search() {
 
   const trimmedQuery = query.trim()
   const showResultsArea = trimmedQuery.length > 0
-  // The user's own onboarding genre picks drive the filter chips; anyone
-  // who hasn't taken the quiz (or answered with no genres) gets a single
-  // "Popular" chip instead of a guessed-at mood list.
-  const genreChips = quizGenres.length > 0 ? quizGenres : [POPULAR_CHIP]
+  // The user's own onboarding genre picks drive the filter chips, always
+  // led by "All" so there's a way to browse outside your own picked
+  // genres — not just a fallback for someone with no quiz answers.
+  const genreChips = [ALL_CHIP, ...quizGenres]
 
   return (
     <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
@@ -286,7 +286,7 @@ export function Search() {
                 : { background: 'var(--nibbles-surface)', color: 'var(--nibbles-ink)' }
             }
           >
-            {genre === POPULAR_CHIP ? 'Popular' : genreLabelFor(genre)}
+            {genre === ALL_CHIP ? 'All' : genreLabelFor(genre)}
           </button>
         ))}
       </div>
