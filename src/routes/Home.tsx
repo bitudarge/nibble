@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
 import { ProgressControl } from '../components/book/ProgressControl'
+import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { CirclesIcon, RecsIcon } from '../components/layout/navIcons'
 import { useAuth } from '../lib/auth/useAuth'
@@ -481,6 +482,18 @@ export function Home() {
           }}
         />
       </section>
+
+      {streak && streak.rest_days_banked > 0 && (
+        <div className="flex items-center gap-3 rounded-[26px] bg-ink p-4">
+          <Mascot pose="resting" alt="" className="h-14 flex-none" />
+          <p className="font-sans text-[13px] leading-relaxed text-page">
+            <span className="font-extrabold">
+              {streak.rest_days_banked} rest day{streak.rest_days_banked === 1 ? '' : 's'} banked.
+            </span>{' '}
+            Miss a day and your streak survives it.
+          </p>
+        </div>
+      )}
 
       <section>
         <div className="mb-3 flex items-center gap-2">

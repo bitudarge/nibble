@@ -95,6 +95,7 @@ export interface ReadingStreak {
   current_streak: number
   longest_streak: number
   last_active_date: string | null
+  rest_days_banked: number
 }
 
 export interface Circle {
