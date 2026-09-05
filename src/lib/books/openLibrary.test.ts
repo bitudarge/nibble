@@ -134,6 +134,71 @@ describe('searchOpenLibraryBySubject', () => {
     const url = fetchMock.mock.calls[0]?.[0] as URL
     expect(url.searchParams.get('limit')).toBe('30')
   })
+
+  it('retries once after a network failure and succeeds on the second attempt', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(jsonResponse({ docs: [{ key: '/works/OL1W', title: 'Retried' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = searchOpenLibraryBySubject('fantasy')
+    await vi.runAllTimersAsync()
+    const results = await promise
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(results).toEqual([
+      {
+        openLibraryId: '/works/OL1W',
+        title: 'Retried',
+        author: null,
+        publishedYear: null,
+        coverUrl: null,
+      },
+    ])
+    vi.useRealTimers()
+  })
+
+  it('retries once after a 5xx and succeeds on the second attempt', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}, false))
+      .mockResolvedValueOnce(jsonResponse({ docs: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = searchOpenLibraryBySubject('fantasy')
+    await vi.runAllTimersAsync()
+    await promise
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
+  it('does not retry a 4xx — a bad request would just fail the same way again', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(searchOpenLibraryBySubject('fantasy')).rejects.toThrow(
+      'Open Library subject lookup failed (404).',
+    )
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('still throws if both attempts fail', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const promise = searchOpenLibraryBySubject('fantasy')
+    const assertion = expect(promise).rejects.toThrow('Failed to fetch')
+    await vi.runAllTimersAsync()
+    await assertion
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
 })
 
 describe('fetchOpenLibraryWorkDetails', () => {

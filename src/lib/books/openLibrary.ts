@@ -29,6 +29,35 @@ interface OpenLibrarySearchResponse {
 
 const SEARCH_URL = 'https://openlibrary.org/search.json'
 
+/**
+ * Open Library has real, observed reliability gaps — confirmed directly
+ * while building this feature (a stretch of outright connection failures
+ * mid-session, unrelated to anything this app did). Retries once, after a
+ * short pause, before giving up on a network failure or a 5xx — enough to
+ * ride out a brief hiccup without making a real outage take twice as long
+ * to report. A 4xx isn't retried (a bad request won't fix itself), and a
+ * deliberate cancellation (an aborted signal, e.g. a fast typist's stale
+ * search) is never treated as a failure to retry.
+ */
+async function fetchWithRetry(url: string | URL, init?: RequestInit): Promise<Response> {
+  let response: Response
+  try {
+    response = await fetch(url, init)
+  } catch (err) {
+    if (init?.signal?.aborted) throw err
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    return fetch(url, init)
+  }
+  // A 4xx is a bad request, not a transient failure, retrying would just
+  // fail the same way again — only retry a network error (above) or a 5xx.
+  // Either way, the retried response (or its own failure) is returned/
+  // thrown as-is so the caller's own status-code-specific error message
+  // still applies rather than a generic one from in here.
+  if (response.status < 500) return response
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  return fetch(url, init)
+}
+
 export async function searchOpenLibrary(
   query: string,
   signal?: AbortSignal,
@@ -38,7 +67,7 @@ export async function searchOpenLibrary(
   url.searchParams.set('fields', 'key,title,author_name,first_publish_year,cover_i')
   url.searchParams.set('limit', '20')
 
-  const response = await fetch(url, { signal })
+  const response = await fetchWithRetry(url, { signal })
   if (!response.ok) {
     throw new Error(`Open Library search failed (${response.status}). Try again in a moment.`)
   }
@@ -124,7 +153,7 @@ export async function searchOpenLibraryBySubject(
   url.searchParams.set('limit', String(limit * 3))
   if (sort) url.searchParams.set('sort', sort)
 
-  const response = await fetch(url)
+  const response = await fetchWithRetry(url)
   if (!response.ok) {
     throw new Error(`Open Library subject lookup failed (${response.status}).`)
   }
