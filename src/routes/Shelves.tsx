@@ -6,6 +6,7 @@ import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { PageLogSheet } from '../components/dashboard/PageLogSheet'
 import { useAuth } from '../lib/auth/useAuth'
+import { enrichBook } from '../lib/books/data'
 import { getStreak, isStreakMilestone } from '../lib/goals/data'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemsWithBooks, setShelfStatus, type ShelfItemWithBook } from '../lib/shelf/data'
@@ -58,6 +59,22 @@ export function Shelves() {
           setItems(shelfItems)
           setStreak(readingStreak)
           setState('loaded')
+        }
+        // Progress bars on this page need a page count, but enrichment has
+        // only ever run lazily from the book's own detail page — a shelf
+        // full of books nobody's individually opened since PR #61 added
+        // page counts would show no bars at all. Top up any that are
+        // still missing one in the background, same as BookPage's own
+        // lazy call: enrichBook decides per book whether there's anything
+        // worth asking for, this just gives it a chance to run here too.
+        for (const item of shelfItems) {
+          if (item.books.page_count) continue
+          void enrichBook(item.books).then((richer) => {
+            if (cancelled || richer.page_count === item.books.page_count) return
+            setItems((prev) =>
+              prev.map((it) => (it.book_id === richer.id ? { ...it, books: richer } : it)),
+            )
+          })
         }
       } catch (err) {
         if (!cancelled) {
