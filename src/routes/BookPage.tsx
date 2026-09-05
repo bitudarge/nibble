@@ -4,6 +4,7 @@ import { BareRatingRow } from '../components/book/BareRatingRow'
 import { BookHero } from '../components/book/BookHero'
 import { FirstRatingExperience } from '../components/book/FirstRatingExperience'
 import { PrivateNoteSummary } from '../components/book/PrivateNoteSummary'
+import { ProgressControl } from '../components/book/ProgressControl'
 import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
 import { useCelebration } from '../components/celebrate/useCelebration'
@@ -74,7 +75,6 @@ export function BookPage() {
   const [circleReview, setCircleReview] = useState<Review | null>(null)
   const [circleTagIds, setCircleTagIds] = useState<string[]>([])
 
-  const [progressInput, setProgressInput] = useState('')
   const [progressError, setProgressError] = useState<string | null>(null)
 
   // The immersive first-rating flow: shown right after rating, only while
@@ -282,13 +282,8 @@ export function BookPage() {
     setCircleReviews(refreshed)
   }
 
-  async function handleLogProgress() {
+  async function handleLogProgress(toPage: number) {
     if (!user || !bookId) return
-    const toPage = Number(progressInput)
-    if (!Number.isFinite(toPage) || toPage < 0) {
-      setProgressError('Enter a valid page number.')
-      return
-    }
     setProgressError(null)
     try {
       // Read the streak before logging so a milestone can be detected by
@@ -306,7 +301,6 @@ export function BookPage() {
         getStreak(user.id),
       ])
       setShelfItem(updatedShelf)
-      setProgressInput('')
       const before = streakBefore?.current_streak ?? 0
       const after = streakAfter?.current_streak ?? 0
       if (isStreakMilestone(before, after)) {
@@ -314,6 +308,7 @@ export function BookPage() {
       }
     } catch (err) {
       setProgressError(err instanceof Error ? err.message : 'Could not log your progress.')
+      throw err // ProgressControl needs this to know the save failed and roll back its own display.
     }
   }
 
@@ -403,44 +398,53 @@ export function BookPage() {
 
           {/* Shelf status and progress are "my shelf entry for this book",
               grouped with the cover/rating/blurb above rather than with
-              reviewing, which lives in its own tab now. */}
-          <section className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-soft">
-            <label className="flex items-center gap-2 font-sans text-sm text-ink">
-              Shelf
-              <select
-                value={shelfItem?.status ?? ''}
-                onChange={(e) => void handleShelfChange(e.target.value as ShelfStatus)}
-                className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
+              reviewing, which lives in its own tab now. A big primary CTA
+              for starting/re-reading (mirrors the round 4 mockup's own
+              "Start reading"/"Read it again" button), the progress slider
+              takes over as the primary action once actually reading. */}
+          <div className="mt-5 flex flex-col gap-3">
+            {shelfItem?.status !== 'reading' && (
+              <button
+                type="button"
+                onClick={() => void handleShelfChange('reading')}
+                className="btn-cta w-full rounded-full bg-sage py-3.5 font-sans text-base font-bold text-surface"
               >
-                <option value="" disabled>
-                  Add to a shelf
-                </option>
-                <option value="want_to_read">Want to read</option>
-                <option value="reading">Reading</option>
-                <option value="finished">Finished</option>
-              </select>
-            </label>
+                {shelfItem?.status === 'finished' ? 'Read it again' : 'Start reading'}
+              </button>
+            )}
 
             {shelfItem?.status === 'reading' && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  value={progressInput}
-                  onChange={(e) => setProgressInput(e.target.value)}
-                  placeholder={`Page (${shelfItem.current_page ?? 0} so far)`}
-                  className="w-36 rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
+              <div className="rounded-[22px] bg-surface p-4 shadow-soft">
+                <h2 className="mb-3 font-display text-base font-semibold text-ink">
+                  Your progress
+                </h2>
+                <ProgressControl
+                  currentPage={shelfItem.current_page ?? 0}
+                  pageCount={book.page_count}
+                  onSave={(page) => handleLogProgress(page)}
                 />
-                <button
-                  type="button"
-                  onClick={() => void handleLogProgress()}
-                  className="rounded-full bg-sage px-4 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95"
-                >
-                  Log progress
-                </button>
               </div>
             )}
-          </section>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void handleShelfChange('want_to_read')}
+                disabled={shelfItem?.status === 'want_to_read'}
+                className="flex-1 rounded-full border-2 border-line bg-surface py-2.5 font-sans text-sm font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-60"
+              >
+                {shelfItem?.status === 'want_to_read' ? 'On your list ✓' : 'Save for later'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleShelfChange('finished')}
+                disabled={shelfItem?.status === 'finished'}
+                className="flex-1 rounded-full border-2 border-line bg-surface py-2.5 font-sans text-sm font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-60"
+              >
+                {shelfItem?.status === 'finished' ? 'Finished ✓' : 'Mark finished'}
+              </button>
+            </div>
+          </div>
           {progressError && (
             <p className="mt-2 font-sans text-sm text-honey-text">{progressError}</p>
           )}

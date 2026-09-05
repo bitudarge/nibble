@@ -6,6 +6,7 @@
  * internals can be rewritten without touching a single component.
  */
 
+export { dismissRecommendation } from './dismissals'
 export { getRecommendations, hasCircleSignal, type Recommendation } from './recommend'
 export {
   MIN_RATINGS_FOR_PERSONALIZATION,
