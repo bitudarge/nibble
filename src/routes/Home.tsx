@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
 import { Mascot } from '../components/brand/Mascot'
@@ -80,6 +80,11 @@ export function Home() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
   const [recordingStreak, setRecordingStreak] = useState(false)
+  // A brief bounce on tap (see index.css's nib-pop), fired immediately
+  // alongside the optimistic leaf fill so the tap itself feels
+  // acknowledged before the network round trip resolves.
+  const [streakPop, setStreakPop] = useState(false)
+  const popTimeoutRef = useRef<number | null>(null)
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [logSheetItemId, setLogSheetItemId] = useState<string | null>(null)
 
@@ -144,6 +149,12 @@ export function Home() {
     }
   }, [user])
 
+  useEffect(() => {
+    return () => {
+      if (popTimeoutRef.current !== null) window.clearTimeout(popTimeoutRef.current)
+    }
+  }, [])
+
   async function quickLogProgress(item: ShelfItemWithBook, toPage: number) {
     if (!user) return
     const streakBefore = streak?.current_streak ?? 0
@@ -193,6 +204,19 @@ export function Home() {
     const streakBefore = streak?.current_streak ?? 0
     setRecordingStreak(true)
     setError(null)
+    if (popTimeoutRef.current !== null) window.clearTimeout(popTimeoutRef.current)
+    setStreakPop(true)
+    popTimeoutRef.current = window.setTimeout(() => setStreakPop(false), 420)
+    // Fill today's leaf in immediately — waiting on two sequential
+    // network round trips (log the session, then re-fetch the whole
+    // week) before showing anything made a successful tap look like it
+    // hadn't registered at all, which is what actually read as "broken"
+    // rather than just slow. Rolled back below if the save fails.
+    setWeekDaysRead((prev) => {
+      const next = [...prev]
+      next[TODAY_WEEK_INDEX] = true
+      return next
+    })
     try {
       const page = item.current_page ?? 0
       await logReadingProgress(user.id, item.book_id, page, page, item.books.page_count)
@@ -205,6 +229,11 @@ export function Home() {
       const daysRead = await getReadDaysThisWeek(user.id, WEEK_KEY)
       setWeekDaysRead(daysRead)
     } catch (err) {
+      setWeekDaysRead((prev) => {
+        const next = [...prev]
+        next[TODAY_WEEK_INDEX] = false
+        return next
+      })
       setError(err instanceof Error ? err.message : 'Could not record today. Try again.')
     } finally {
       setRecordingStreak(false)
@@ -388,7 +417,9 @@ export function Home() {
           </ProgressRing>
           <div className="min-w-0 flex-1">
             <div className="mb-2 font-sans text-[11px] font-bold tracking-wide text-muted uppercase">
-              Days this week · tap today's leaf to log a streak day
+              {currentlyReading.length === 0
+                ? 'Days this week · start a book to log a streak day'
+                : "Days this week · tap today's leaf to log a streak day"}
             </div>
             <div className="flex gap-1.5">
               {WEEK_DAY_LABELS.map((label, i) => {
@@ -406,7 +437,10 @@ export function Home() {
                         disabled={recordingStreak || read || currentlyReading.length === 0}
                         aria-label={read ? 'Today logged' : 'Log today as a reading day'}
                         className="flex h-8 w-full items-center justify-center rounded-[10px] transition-transform active:scale-90 disabled:active:scale-100"
-                        style={cellStyle}
+                        style={{
+                          ...cellStyle,
+                          animation: streakPop ? 'nib-pop 0.42s ease' : undefined,
+                        }}
                       >
                         {read && <LeafIcon className="text-surface" />}
                       </button>

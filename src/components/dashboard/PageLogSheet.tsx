@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookCover } from '../book/BookCover'
 import type { ShelfItemWithBook } from '../../lib/shelf/data'
 
@@ -37,6 +37,20 @@ export function PageLogSheet({
   const [pageInput, setPageInput] = useState(String(initial?.current_page ?? 0))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Locks the page underneath while the sheet is open. Without this, a
+  // touch-drag anywhere over the backdrop on mobile could scroll the
+  // Home page behind it instead of just the sheet, which is what made
+  // reaching Save feel like "having to scroll all the way down" — the
+  // sheet itself was already correctly sized and positioned, the
+  // background was the thing moving.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
 
   function selectItem(item: ShelfItemWithBook) {
     setSelected(item)
@@ -97,28 +111,42 @@ export function PageLogSheet({
               Nibbles remembers your pick for next time.
             </p>
             <div className="flex flex-col gap-2">
-              {items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => selectItem(item)}
-                  className="flex items-center gap-3 rounded-2xl bg-tint p-3 text-left transition-transform active:scale-[.985]"
-                >
-                  <BookCover
-                    coverUrl={item.books.cover_url}
-                    title={item.books.title}
-                    className="h-14 w-10 flex-none"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-display text-sm font-semibold text-ink">
-                      {item.books.title}
+              {items.map((item) => {
+                const itemPageCount = item.books.page_count
+                const itemPct = itemPageCount
+                  ? Math.min(100, Math.round(((item.current_page ?? 0) / itemPageCount) * 100))
+                  : null
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => selectItem(item)}
+                    className="flex items-center gap-3 rounded-2xl bg-tint p-3 text-left transition-transform active:scale-[.985]"
+                  >
+                    <BookCover
+                      coverUrl={item.books.cover_url}
+                      title={item.books.title}
+                      className="h-14 w-10 flex-none"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-display text-sm font-semibold text-ink">
+                        {item.books.title}
+                      </div>
+                      <div className="mt-0.5 font-sans text-xs text-muted">
+                        page {item.current_page ?? 0} of {item.books.page_count ?? '?'}
+                      </div>
+                      {itemPct !== null && (
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface">
+                          <div
+                            className="h-full rounded-full bg-sage"
+                            style={{ width: `${itemPct}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-0.5 font-sans text-xs text-muted">
-                      page {item.current_page ?? 0} of {item.books.page_count ?? '?'}
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
             <button
               type="button"
