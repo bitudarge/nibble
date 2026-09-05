@@ -6,12 +6,30 @@ import { updateProfile } from '../lib/profile/data'
 import { resolveDisplayIdentity } from '../lib/profile/identity'
 
 const MASCOT_PICKER_ORDER: { pose: MascotPose; label: string }[] = [
-  { pose: 'eating', label: 'Nibbling' },
-  { pose: 'hearts', label: 'In love with it' },
-  { pose: 'idea', label: 'Got an idea' },
-  { pose: 'thinking', label: 'Thinking it over' },
+  { pose: 'happy', label: 'Happy' },
+  { pose: 'wink', label: 'Winking' },
+  { pose: 'laughing', label: 'Laughing' },
+  { pose: 'hug', label: 'In love with it' },
+  { pose: 'surprised', label: 'Surprised' },
   { pose: 'curious', label: 'Curious' },
+  { pose: 'sleepy', label: 'Sleepy' },
+  { pose: 'glasses', label: 'Deep in a book' },
+  { pose: 'laptop', label: 'On the laptop' },
+  { pose: 'eating', label: 'Nibbling' },
+  { pose: 'cheerful', label: 'Cheerful' },
+  { pose: 'hiding', label: 'Hiding' },
+  { pose: 'sad', label: 'A little sad' },
+  { pose: 'hearts', label: 'Heart eyes' },
+  { pose: 'cool', label: 'Feeling cool' },
   { pose: 'resting', label: 'Taking it easy' },
+  { pose: 'thinking', label: 'Thinking it over' },
+  { pose: 'cheering', label: 'Cheering' },
+  { pose: 'lyingSad', label: 'Down bad' },
+  { pose: 'lyingHeart', label: 'Lying around' },
+  { pose: 'dizzy', label: 'Dizzy' },
+  { pose: 'angry', label: 'Grumpy' },
+  { pose: 'idea', label: 'Got an idea' },
+  { pose: 'waving', label: 'Waving hello' },
 ]
 
 /**
