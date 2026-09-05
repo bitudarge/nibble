@@ -134,14 +134,28 @@ export function AppShell() {
               {streak?.current_streak ?? 0}
             </span>
           </div>
-          <Link
-            to="/wrap"
-            aria-label="Go to your profile"
-            className="flex h-11 items-center gap-2 rounded-full bg-leaf px-4 font-sans text-sm font-extrabold text-on-leaf transition-transform active:scale-95"
-          >
-            {avatarUrl && <img src={avatarUrl} alt="" className="h-6 w-6 rounded-full" />}
-            You
-          </Link>
+          {/* The picture is enough on its own once there is one — a
+              "You" label next to it was redundant (the owner's own
+              feedback). Only shown as text when there's no avatar to
+              show instead, so the pill never collapses to nothing
+              tappable. */}
+          {avatarUrl ? (
+            <Link
+              to="/wrap"
+              aria-label="Go to your profile"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full transition-transform active:scale-95"
+            >
+              <img src={avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover" />
+            </Link>
+          ) : (
+            <Link
+              to="/wrap"
+              aria-label="Go to your profile"
+              className="flex h-11 items-center gap-2 rounded-full bg-leaf px-4 font-sans text-sm font-extrabold text-on-leaf transition-transform active:scale-95"
+            >
+              You
+            </Link>
+          )}
         </div>
 
         {menuOpen && (
