@@ -43,6 +43,30 @@ describe('searchOpenLibraryBySubject', () => {
     ])
   })
 
+  it('omits the sort param by default, leaving Open Library its own ordering', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ works: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    await searchOpenLibraryBySubject('fantasy', 10)
+    const url = fetchMock.mock.calls[0]?.[0] as URL
+    expect(url.searchParams.has('sort')).toBe(false)
+  })
+
+  it('passes sort=new through when asked for the newest first', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ works: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    await searchOpenLibraryBySubject('fantasy', 10, 'new')
+    const url = fetchMock.mock.calls[0]?.[0] as URL
+    expect(url.searchParams.get('sort')).toBe('new')
+  })
+
+  it('passes sort=old through when asked for the oldest first', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ works: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    await searchOpenLibraryBySubject('fantasy', 10, 'old')
+    const url = fetchMock.mock.calls[0]?.[0] as URL
+    expect(url.searchParams.get('sort')).toBe('old')
+  })
+
   it('skips works with no key or title and handles a missing cover/author', async () => {
     vi.stubGlobal(
       'fetch',

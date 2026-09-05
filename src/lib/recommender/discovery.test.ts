@@ -57,9 +57,29 @@ describe('discoverBooksForGenres', () => {
 
     const discovered = await discoverBooksForGenres(['fantasy', 'romance'], new Set())
 
-    expect(mockedSearch).toHaveBeenCalledWith('fantasy', 8)
-    expect(mockedSearch).toHaveBeenCalledWith('romance', 8)
+    expect(mockedSearch).toHaveBeenCalledWith('fantasy', 8, 'new')
+    expect(mockedSearch).toHaveBeenCalledWith('romance', 8, 'new')
     expect(discovered.map((b) => b.id)).toEqual(['b-fantasy-1', 'b-romance-1'])
+  })
+
+  it('defaults to sorting newest-first, even with no recency answer at all', async () => {
+    mockedSearch.mockResolvedValue([])
+    await discoverBooksForGenres(['fantasy'], new Set())
+    expect(mockedSearch).toHaveBeenCalledWith('fantasy', 8, 'new')
+  })
+
+  it('still sorts newest-first for an explicit "newer" or "no-preference" answer', async () => {
+    mockedSearch.mockResolvedValue([])
+    await discoverBooksForGenres(['fantasy'], new Set(), 'newer')
+    expect(mockedSearch).toHaveBeenLastCalledWith('fantasy', 8, 'new')
+    await discoverBooksForGenres(['fantasy'], new Set(), 'no-preference')
+    expect(mockedSearch).toHaveBeenLastCalledWith('fantasy', 8, 'new')
+  })
+
+  it('sorts oldest-first only for an explicit "classics" answer', async () => {
+    mockedSearch.mockResolvedValue([])
+    await discoverBooksForGenres(['fantasy'], new Set(), 'classics')
+    expect(mockedSearch).toHaveBeenLastCalledWith('fantasy', 8, 'old')
   })
 
   it('excludes books already in the candidate pool or on the shelf', async () => {
