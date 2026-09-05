@@ -38,10 +38,16 @@ function GenreShelf({
   genre,
   openingId,
   onSelect,
+  addedIds,
+  addingId,
+  onQuickAdd,
 }: {
   genre: string
   openingId: string | null
   onSelect: (result: OpenLibrarySearchResult) => void
+  addedIds: Set<string>
+  addingId: string | null
+  onQuickAdd: (result: OpenLibrarySearchResult) => void
 }) {
   const [state, setState] = useState<ShelfState>('loading')
   const [books, setBooks] = useState<OpenLibrarySearchResult[]>([])
@@ -119,28 +125,43 @@ function GenreShelf({
 
       {state === 'loaded' && books.length > 0 && (
         <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
-          {books.map((book) => (
-            <button
-              key={book.openLibraryId}
-              type="button"
-              onClick={() => onSelect(book)}
-              disabled={openingId !== null}
-              className="w-[132px] flex-none rounded-[20px] bg-surface p-2.5 text-left shadow-soft transition-transform active:scale-95 disabled:opacity-50"
-            >
-              <BookCover coverUrl={book.coverUrl} title={book.title} className="h-32 w-full" />
-              <span className="mt-2 block truncate font-display text-sm font-semibold text-ink">
-                {book.title}
-              </span>
-              {book.author && (
-                <span className="mt-0.5 block truncate font-sans text-xs text-muted">
-                  {book.author}
-                </span>
-              )}
-              {openingId === book.openLibraryId && (
-                <span className="mt-0.5 block font-sans text-xs text-muted">Opening…</span>
-              )}
-            </button>
-          ))}
+          {books.map((book) => {
+            const added = addedIds.has(book.openLibraryId)
+            return (
+              <div
+                key={book.openLibraryId}
+                className="w-[132px] flex-none rounded-[20px] bg-surface p-2.5 shadow-soft"
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelect(book)}
+                  disabled={openingId !== null}
+                  className="flex w-full flex-col text-left transition-transform active:scale-95 disabled:opacity-50"
+                >
+                  <BookCover coverUrl={book.coverUrl} title={book.title} className="h-32 w-full" />
+                  <span className="mt-2 block truncate font-display text-sm font-semibold text-ink">
+                    {book.title}
+                  </span>
+                  {book.author && (
+                    <span className="mt-0.5 block truncate font-sans text-xs text-muted">
+                      {book.author}
+                    </span>
+                  )}
+                  {openingId === book.openLibraryId && (
+                    <span className="mt-0.5 block font-sans text-xs text-muted">Opening…</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onQuickAdd(book)}
+                  disabled={added || addingId === book.openLibraryId}
+                  className="mt-1.5 w-full rounded-full border-2 border-line bg-surface py-1 font-sans text-[11px] font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-60"
+                >
+                  {added ? 'On your list ✓' : addingId === book.openLibraryId ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
     </section>
@@ -160,10 +181,16 @@ export function GenreShelves({
   genres,
   openingId,
   onSelect,
+  addedIds,
+  addingId,
+  onQuickAdd,
 }: {
   genres: string[]
   openingId: string | null
   onSelect: (result: OpenLibrarySearchResult) => void
+  addedIds: Set<string>
+  addingId: string | null
+  onQuickAdd: (result: OpenLibrarySearchResult) => void
 }) {
   // Defensive de-dup, in case the same genre ever ends up twice in quiz
   // answers, then cap to a reasonable number of shelves.
@@ -181,7 +208,15 @@ export function GenreShelves({
   return (
     <div className="mb-1">
       {shelfGenres.map((genre) => (
-        <GenreShelf key={genre} genre={genre} openingId={openingId} onSelect={onSelect} />
+        <GenreShelf
+          key={genre}
+          genre={genre}
+          openingId={openingId}
+          onSelect={onSelect}
+          addedIds={addedIds}
+          addingId={addingId}
+          onQuickAdd={onQuickAdd}
+        />
       ))}
     </div>
   )
