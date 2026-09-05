@@ -172,6 +172,46 @@ export async function searchOpenLibraryBySubject(
     }))
 }
 
+/**
+ * More books by an author whose work is already on someone's shelf — the
+ * owner asked that adding a book to a library/list should surface "some
+ * other books by the author or similar genres." `author` is matched
+ * loosely (Open Library's own `author:` search field, not an exact-key
+ * lookup), which is intentional: this app only ever stores an author's
+ * plain display name string (see `books.author`), never their Open
+ * Library author key, so an exact-id match isn't available here. Same
+ * English-only filtering and retry behavior as searchOpenLibraryBySubject.
+ */
+export async function searchOpenLibraryByAuthor(
+  author: string,
+  limit = 6,
+): Promise<OpenLibrarySearchResult[]> {
+  const url = new URL(SEARCH_URL)
+  url.searchParams.set('q', `author:"${author}"`)
+  url.searchParams.set('language', 'eng')
+  url.searchParams.set('fields', 'key,title,author_name,first_publish_year,cover_i')
+  url.searchParams.set('limit', String(limit * 3))
+  url.searchParams.set('sort', 'new')
+
+  const response = await fetchWithRetry(url)
+  if (!response.ok) {
+    throw new Error(`Open Library author lookup failed (${response.status}).`)
+  }
+
+  const data = (await response.json()) as OpenLibrarySearchResponse
+
+  return data.docs
+    .filter((doc) => doc.key && doc.title && looksLikeEnglishTitle(doc.title))
+    .slice(0, limit)
+    .map((doc) => ({
+      openLibraryId: doc.key,
+      title: doc.title,
+      author: doc.author_name?.[0] ?? null,
+      publishedYear: doc.first_publish_year ?? null,
+      coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+    }))
+}
+
 export interface OpenLibraryWorkDetails {
   description: string | null
   subjects: string[]
