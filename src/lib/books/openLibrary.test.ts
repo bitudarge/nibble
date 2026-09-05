@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   fetchOpenLibraryPageCount,
   fetchOpenLibraryWorkDetails,
+  searchOpenLibraryByAuthor,
   searchOpenLibraryBySubject,
 } from './openLibrary'
 
@@ -198,6 +199,71 @@ describe('searchOpenLibraryBySubject', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     vi.useRealTimers()
+  })
+})
+
+describe('searchOpenLibraryByAuthor', () => {
+  it('queries by author and restricts to English-language editions, newest first', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ docs: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+    await searchOpenLibraryByAuthor('Andy Weir', 6)
+    const url = fetchMock.mock.calls[0]?.[0] as URL
+    expect(url.searchParams.get('q')).toBe('author:"Andy Weir"')
+    expect(url.searchParams.get('language')).toBe('eng')
+    expect(url.searchParams.get('sort')).toBe('new')
+  })
+
+  it('maps results the same way searchOpenLibraryBySubject does', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          docs: [
+            {
+              key: '/works/OL21745884W',
+              title: 'Project Hail Mary',
+              author_name: ['Andy Weir'],
+              cover_i: 12345,
+              first_publish_year: 2021,
+            },
+          ],
+        }),
+      ),
+    )
+
+    expect(await searchOpenLibraryByAuthor('Andy Weir')).toEqual([
+      {
+        openLibraryId: '/works/OL21745884W',
+        title: 'Project Hail Mary',
+        author: 'Andy Weir',
+        publishedYear: 2021,
+        coverUrl: 'https://covers.openlibrary.org/b/id/12345-M.jpg',
+      },
+    ])
+  })
+
+  it('filters out titles that are not in Latin script', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          docs: [
+            { key: '/works/OL1W', title: '曉のヨナ' },
+            { key: '/works/OL2W', title: 'A Real English Title' },
+          ],
+        }),
+      ),
+    )
+
+    const titles = (await searchOpenLibraryByAuthor('Some Author')).map((r) => r.title)
+    expect(titles).toEqual(['A Real English Title'])
+  })
+
+  it('throws when the request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false)))
+    await expect(searchOpenLibraryByAuthor('Some Author')).rejects.toThrow(
+      'Open Library author lookup failed (500).',
+    )
   })
 })
 

@@ -1,6 +1,10 @@
 import type { Book } from '../../types/database'
 import { getOrCreateBook } from '../books/data'
-import { searchOpenLibraryBySubject, type OpenLibrarySearchResult } from '../books/openLibrary'
+import {
+  searchOpenLibraryByAuthor,
+  searchOpenLibraryBySubject,
+  type OpenLibrarySearchResult,
+} from '../books/openLibrary'
 import { genreTagToSubjectSlug } from './tagVocabulary'
 import type { TasteQuizAnswers } from './types'
 
@@ -142,4 +146,66 @@ export async function discoverPopularBooks(excludeBookIds: Set<string>): Promise
     return []
   }
   return materializeDiscoveredBooks(results, excludeBookIds, POPULAR_RESULTS)
+}
+
+const AUTHORS_TO_SEARCH = 2
+const RESULTS_PER_AUTHOR = 4
+
+/**
+ * More books by an author already on the reader's shelf (any status —
+ * want-to-read counts, not just finished/rated) — the owner asked that
+ * adding a book to a library/list should surface "some other books by
+ * the author." `authors` should be the most-recently-added distinct
+ * authors on the shelf, most recent first; only the first
+ * `AUTHORS_TO_SEARCH` are actually queried, same bounded/best-effort
+ * contract as the other discovery functions here. Returns each found
+ * book paired with the author that surfaced it (not just a bare `Book[]`
+ * like the other discovery functions) — recommend.ts needs that pairing
+ * to give an honest "more by {author}" reason to a match that has no
+ * other real personalization signal, the same way discoverPopularBooks'
+ * caller does for bestsellers.
+ */
+export async function discoverBooksByAuthors(
+  authors: string[],
+  excludeBookIds: Set<string>,
+): Promise<{ book: Book; author: string }[]> {
+  const topAuthors = authors.slice(0, AUTHORS_TO_SEARCH)
+  if (topAuthors.length === 0) return []
+
+  const resultsByAuthor = await Promise.all(
+    topAuthors.map(async (author) => {
+      try {
+        const results = await searchOpenLibraryByAuthor(author, RESULTS_PER_AUTHOR)
+        return results.map((result) => ({ result, author }))
+      } catch {
+        return []
+      }
+    }),
+  )
+
+  const seenOpenLibraryIds = new Set<string>()
+  const flattened = resultsByAuthor.flat().filter(({ result }) => {
+    if (seenOpenLibraryIds.has(result.openLibraryId)) return false
+    seenOpenLibraryIds.add(result.openLibraryId)
+    return true
+  })
+
+  const created = await Promise.all(
+    flattened.map(async ({ result, author }) => {
+      try {
+        return { book: await getOrCreateBook(result), author }
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  const discovered: { book: Book; author: string }[] = []
+  const usedIds = new Set(excludeBookIds)
+  for (const entry of created) {
+    if (!entry || usedIds.has(entry.book.id)) continue
+    usedIds.add(entry.book.id)
+    discovered.push(entry)
+  }
+  return discovered
 }

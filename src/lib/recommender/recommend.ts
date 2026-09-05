@@ -1,10 +1,10 @@
-import { getRecentlyAddedBooks } from '../books/data'
-import { getShelfItems } from '../shelf/data'
+import { enrichBook, getRecentlyAddedBooks } from '../books/data'
+import { getShelfItemsWithBooks } from '../shelf/data'
 import type { Book } from '../../types/database'
 import { getBookTagProfiles } from './bookTagProfile'
 import { getCircleSignals } from './circleSignals'
 import { getDismissedBookIds } from './dismissals'
-import { discoverBooksForGenres, discoverPopularBooks } from './discovery'
+import { discoverBooksByAuthors, discoverBooksForGenres, discoverPopularBooks } from './discovery'
 import { NO_REASON_YET_MESSAGE, explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
 import type { CircleSignal, TasteProfileData } from './types'
@@ -91,13 +91,39 @@ export function topGenreAffinities(tagAffinity: Record<string, number>, limit = 
 }
 
 /**
+ * Distinct authors from the reader's own shelf, most-recently-added
+ * first — any shelf status counts (want-to-read included, not just
+ * finished/rated), since the owner asked specifically for "if the user
+ * adds [a book] in their library or list" to drive more-like-this picks,
+ * not only a book they've already rated. Feeds `discovery.ts`'s
+ * `discoverBooksByAuthors` — pure and testable without a database, same
+ * reasoning as `topGenreAffinities` below.
+ */
+export function recentShelfAuthors(
+  shelfItems: { updated_at: string; books: { author: string | null } }[],
+): string[] {
+  const seen = new Set<string>()
+  const authors: string[] = []
+  // Already ordered most-recently-updated first by getShelfItemsWithBooks,
+  // but sort defensively here too so this stays correct for any caller.
+  const sorted = [...shelfItems].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  for (const item of sorted) {
+    const author = item.books.author
+    if (!author || seen.has(author)) continue
+    seen.add(author)
+    authors.push(author)
+  }
+  return authors
+}
+
+/**
  * The recommender's one public entry point for "what should I read next".
  * Degrades gracefully: with no ratings and no quiz signal, falls back to
  * recently-added books with an honest label rather than a fake "why".
  */
 export async function getRecommendations(userId: string, limit = 10): Promise<Recommendation[]> {
   const [shelfItems, dismissedBookIds] = await Promise.all([
-    getShelfItems(userId),
+    getShelfItemsWithBooks(userId),
     getDismissedBookIds(userId),
   ])
   // "Not for me" excludes a book from every future call the same way a
@@ -165,6 +191,25 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     // dependency.
   }
 
+  // "If the user adds in their library or list, recommend some other
+  // books by the author" — any shelf status counts, not just rated
+  // books, since adding a book to a list is itself a real signal even
+  // before it's read. Tracked with the specific author that earned each
+  // match (see authorMatchReasons below), same honest-fallback shape as
+  // the bestseller reason above.
+  const authorMatchReasons = new Map<string, string>()
+  try {
+    const excludeIds = new Set([...excludedBookIds, ...candidates.map((book) => book.id)])
+    const byAuthor = await discoverBooksByAuthors(recentShelfAuthors(shelfItems), excludeIds)
+    for (const { book, author } of byAuthor) {
+      authorMatchReasons.set(book.id, `You added a book by ${author} — here's another.`)
+      candidates.push(book)
+    }
+  } catch {
+    // Same reasoning as the other discovery calls above: a bonus signal,
+    // not a hard dependency.
+  }
+
   if (candidates.length === 0) return []
 
   const candidateIds = candidates.map((book) => book.id)
@@ -178,15 +223,28 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     const signals = circleSignals.get(book.id) ?? []
     const result = scoreBook(tasteProfile, tagProfile, signals)
     let why = explainScore(result)
-    // A bestseller pick that happens to also match the taste profile keeps
-    // its real, specific reason from explainScore above; one that doesn't
-    // gets this instead of being dropped by hasRealReason below — being a
-    // current bestseller is itself honest, non-fabricated signal, not the
-    // generic "we don't have a reason yet" filler that IS worth excluding.
-    if (!hasRealReason(why) && popularBookIds.has(book.id)) {
-      why = ['A current bestseller, worth a look even without a personal match yet.']
+    // A personal tag match (quiz answers or past ratings) is the
+    // recommender's strongest, most specific signal — the owner asked
+    // for onboarding-quiz-based picks "to be first," so this is tracked
+    // separately from score alone (a discovered bestseller/author match
+    // can still out-score a weak tag match numerically) and used to sort
+    // ahead of everything else below, regardless of relative score.
+    const hasPersonalMatch = result.tagMatches.some((m) => m.contribution > 0)
+    // A bestseller or same-author pick that happens to also match the
+    // taste profile keeps its real, specific reason from explainScore
+    // above; one that doesn't gets one of these instead of being dropped
+    // by hasRealReason below — both are honest, non-fabricated signals,
+    // not the generic "we don't have a reason yet" filler that IS worth
+    // excluding. Author match checked first: it's the more specific of
+    // the two when a book somehow qualifies as both.
+    if (!hasRealReason(why)) {
+      const authorReason = authorMatchReasons.get(book.id)
+      if (authorReason) why = [authorReason]
+      else if (popularBookIds.has(book.id)) {
+        why = ['A current bestseller, worth a look even without a personal match yet.']
+      }
     }
-    return { book, score: result.score, why, circleSignals: signals }
+    return { book, score: result.score, why, circleSignals: signals, hasPersonalMatch }
   })
 
   // The owner asked to never show the generic "we don't have a specific
@@ -197,5 +255,36 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
   // empty-feeling explanation. This can return fewer than `limit`.
   const withRealReasons = scored.filter((rec) => hasRealReason(rec.why))
 
-  return withRealReasons.sort((a, b) => b.score - a.score).slice(0, limit)
+  const ranked = withRealReasons
+    .sort((a, b) => {
+      // Personal-taste matches (quiz/ratings) always rank above bestseller-
+      // or author-only picks, regardless of score — see hasPersonalMatch's
+      // own comment above for why this isn't just left to score ordering.
+      if (a.hasPersonalMatch !== b.hasPersonalMatch) return a.hasPersonalMatch ? -1 : 1
+      return b.score - a.score
+    })
+    .slice(0, limit)
+
+  // Every book actually shown gets one more chance at a real description
+  // and page count before going out — the owner asked to "find all of the
+  // books you recommend [data] for their about and pages." Only runs on
+  // the final, already-small `limit`-sized slice (not the whole candidate
+  // pool), so this stays cheap; enrichBook itself is a no-op for a book
+  // that's already fully enriched, safe to call unconditionally here.
+  const enrichedBooks = await Promise.all(
+    ranked.map(async (rec) => {
+      try {
+        return await enrichBook(rec.book)
+      } catch {
+        return rec.book
+      }
+    }),
+  )
+
+  return ranked.map((rec, i) => ({
+    book: enrichedBooks[i] ?? rec.book,
+    score: rec.score,
+    why: rec.why,
+    circleSignals: rec.circleSignals,
+  }))
 }

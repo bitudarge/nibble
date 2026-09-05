@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Book } from '../../types/database'
 import { getOrCreateBook } from '../books/data'
-import { searchOpenLibraryBySubject } from '../books/openLibrary'
-import { discoverBooksForGenres, discoverPopularBooks } from './discovery'
+import { searchOpenLibraryByAuthor, searchOpenLibraryBySubject } from '../books/openLibrary'
+import { discoverBooksByAuthors, discoverBooksForGenres, discoverPopularBooks } from './discovery'
 
 vi.mock('../books/data', () => ({
   getOrCreateBook: vi.fn(),
 }))
 vi.mock('../books/openLibrary', () => ({
   searchOpenLibraryBySubject: vi.fn(),
+  searchOpenLibraryByAuthor: vi.fn(),
 }))
 
 function book(id: string, openLibraryId: string): Book {
@@ -36,10 +37,12 @@ function searchResult(openLibraryId: string) {
 }
 
 const mockedSearch = vi.mocked(searchOpenLibraryBySubject)
+const mockedSearchByAuthor = vi.mocked(searchOpenLibraryByAuthor)
 const mockedGetOrCreate = vi.mocked(getOrCreateBook)
 
 beforeEach(() => {
   mockedSearch.mockReset()
+  mockedSearchByAuthor.mockReset()
   mockedGetOrCreate.mockReset()
 })
 
@@ -142,5 +145,55 @@ describe('discoverPopularBooks', () => {
   it('returns nothing rather than throwing when the search fails', async () => {
     mockedSearch.mockRejectedValue(new Error('network error'))
     expect(await discoverPopularBooks(new Set())).toEqual([])
+  })
+})
+
+describe('discoverBooksByAuthors', () => {
+  it('returns nothing when there are no authors to search', async () => {
+    expect(await discoverBooksByAuthors([], new Set())).toEqual([])
+    expect(mockedSearchByAuthor).not.toHaveBeenCalled()
+  })
+
+  it('searches only the first two authors, pairing each result with the author that found it', async () => {
+    mockedSearchByAuthor.mockImplementation(async (author) => [searchResult(`${author}-1`)])
+    mockedGetOrCreate.mockImplementation(async (result) =>
+      book('b-' + result.openLibraryId, result.openLibraryId),
+    )
+
+    const discovered = await discoverBooksByAuthors(['Author A', 'Author B', 'Author C'], new Set())
+
+    expect(mockedSearchByAuthor).toHaveBeenCalledTimes(2)
+    expect(mockedSearchByAuthor).toHaveBeenCalledWith('Author A', 4)
+    expect(mockedSearchByAuthor).toHaveBeenCalledWith('Author B', 4)
+    expect(discovered).toEqual([
+      { book: book('b-Author A-1', 'Author A-1'), author: 'Author A' },
+      { book: book('b-Author B-1', 'Author B-1'), author: 'Author B' },
+    ])
+  })
+
+  it('excludes books already in the pool', async () => {
+    mockedSearchByAuthor.mockResolvedValue([searchResult('ol1'), searchResult('ol2')])
+    mockedGetOrCreate.mockImplementation(async (result) =>
+      book('b-' + result.openLibraryId, result.openLibraryId),
+    )
+
+    const discovered = await discoverBooksByAuthors(['Author A'], new Set(['b-ol1']))
+
+    expect(discovered.map((d) => d.book.id)).toEqual(['b-ol2'])
+  })
+
+  it('skips an author whose search fails and a book that fails to save, without throwing', async () => {
+    mockedSearchByAuthor.mockImplementation(async (author) => {
+      if (author === 'Author A') throw new Error('network error')
+      return [searchResult('ol1'), searchResult('ol2')]
+    })
+    mockedGetOrCreate.mockImplementation(async (result) => {
+      if (result.openLibraryId === 'ol1') throw new Error('save failed')
+      return book('b-ol2', 'ol2')
+    })
+
+    const discovered = await discoverBooksByAuthors(['Author A', 'Author B'], new Set())
+
+    expect(discovered.map((d) => d.book.id)).toEqual(['b-ol2'])
   })
 })
