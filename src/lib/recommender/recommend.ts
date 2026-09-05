@@ -5,7 +5,7 @@ import { getBookTagProfiles } from './bookTagProfile'
 import { getCircleSignals } from './circleSignals'
 import { getDismissedBookIds } from './dismissals'
 import { discoverBooksForGenres } from './discovery'
-import { explainScore, scoreBook } from './scoring'
+import { NO_REASON_YET_MESSAGE, explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
 import type { CircleSignal, TasteProfileData } from './types'
 
@@ -49,6 +49,16 @@ export interface Recommendation {
  */
 export function hasCircleSignal(rec: Pick<Recommendation, 'circleSignals'>): boolean {
   return rec.circleSignals.length > 0
+}
+
+/**
+ * True when a scored recommendation's "why" is a real, specific reason
+ * rather than just `explainScore`'s generic no-signal filler sentence.
+ * Pure and exported so `getRecommendations`'s filtering is testable
+ * without a database, same reasoning as `hasCircleSignal` above.
+ */
+export function hasRealReason(why: string[]): boolean {
+  return why.length > 0 && !(why.length === 1 && why[0] === NO_REASON_YET_MESSAGE)
 }
 
 /**
@@ -148,5 +158,13 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     return { book, score: result.score, why: explainScore(result), circleSignals: signals }
   })
 
-  return scored.sort((a, b) => b.score - a.score).slice(0, limit)
+  // The owner asked to never show the generic "we don't have a specific
+  // reason yet" filler for now, and to lean entirely on quiz-derived (or
+  // rating-derived) affinity instead — a candidate that only ever produced
+  // that fallback sentence didn't actually match anything the taste
+  // profile knows about, so it's excluded here rather than shown with an
+  // empty-feeling explanation. This can return fewer than `limit`.
+  const withRealReasons = scored.filter((rec) => hasRealReason(rec.why))
+
+  return withRealReasons.sort((a, b) => b.score - a.score).slice(0, limit)
 }

@@ -1,5 +1,14 @@
 import type { BookTagProfile, CircleSignal, ScoredBook, TagMatch, TasteProfileData } from './types'
 
+/**
+ * The generic filler explainScore falls back to when a scored candidate
+ * has no real tag or circle signal at all. Exported so recommend.ts can
+ * filter these out by exact match rather than duplicating the string (or
+ * guessing at reasons.length === 0 some other way).
+ */
+export const NO_REASON_YET_MESSAGE =
+  "We don't have a specific reason yet. Rate a few books or take the taste quiz to help us explain picks better."
+
 /** How much a circle-mate's rating counts relative to the user's own tag-based taste. Tune here. */
 const CIRCLE_SIGNAL_WEIGHT = 0.5
 
@@ -135,9 +144,7 @@ export function explainScore(scored: ScoredBook): string[] {
   }
 
   if (reasons.length === 0) {
-    reasons.push(
-      "We don't have a specific reason yet. Rate a few books or take the taste quiz to help us explain picks better.",
-    )
+    reasons.push(NO_REASON_YET_MESSAGE)
   }
 
   return reasons
