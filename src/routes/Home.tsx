@@ -6,6 +6,7 @@ import { useCelebration } from '../components/celebrate/useCelebration'
 import { PageLogSheet } from '../components/dashboard/PageLogSheet'
 import { ProgressRing } from '../components/dashboard/ProgressRing'
 import { CirclesIcon, RecsIcon, StreakIcon } from '../components/layout/navIcons'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
 import {
@@ -62,6 +63,55 @@ function eveningsLeft(pagesLeft: number): number {
   return Math.max(1, Math.ceil(pagesLeft / 45))
 }
 
+/**
+ * Shown the instant this page mounts, shaped like the real dashboard
+ * below (hero card, goals card, a row of book-shaped cards) rather than a
+ * blank screen or a plain "Loading…" line — the owner asked for exactly
+ * this after finding the dashboard slow to open: a content-shaped
+ * placeholder reads as "the page is working" instead of "did this break."
+ */
+function HomeSkeleton() {
+  return (
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <div className="rounded-[30px] bg-surface p-4.5 shadow-soft">
+        <div className="mb-4 flex gap-4">
+          <Skeleton className="h-[130px] w-[86px] flex-none" />
+          <div className="flex min-w-0 flex-1 flex-col gap-2 py-1">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-3.5 w-2/3" />
+          </div>
+        </div>
+        <Skeleton className="mb-4 h-3 w-full" />
+        <Skeleton className="h-10 w-full rounded-full" />
+      </div>
+      <div className="rounded-[30px] bg-surface p-4.5 shadow-soft">
+        <Skeleton className="mb-4 h-5 w-28" />
+        <div className="mb-4 flex items-center gap-4">
+          <Skeleton className="h-16 w-16 flex-none rounded-full" />
+          <div className="min-w-0 flex-1 gap-1.5">
+            <Skeleton className="mb-2 h-3 w-40" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        </div>
+        <Skeleton className="h-3.5 w-full" />
+      </div>
+      <div>
+        <Skeleton className="mb-3 h-5 w-32" />
+        <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-[178px] w-[132px] flex-none" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function Home() {
   const { user, profile } = useAuth()
   const { celebrate, node: celebrationNode } = useCelebration()
@@ -77,7 +127,11 @@ export function Home() {
   const [weekGoal, setWeekGoal] = useState<ReadingGoal | null>(null)
   const [weekDaysRead, setWeekDaysRead] = useState<boolean[]>(Array(7).fill(false) as boolean[])
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([])
+  // null (not []) specifically means "still loading" — recommendations
+  // load independently of everything else below, see the second effect's
+  // own comment for why, so this needs its own three-way state rather
+  // than reusing the page's main `state`.
+  const [recommendations, setRecommendations] = useState<Recommendation[] | null>(null)
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
   const [recordingStreak, setRecordingStreak] = useState(false)
   // A brief bounce on tap (see index.css's nib-pop), fired immediately
@@ -107,7 +161,6 @@ export function Home() {
           weekGoalRow,
           daysRead,
           readingStreak,
-          recs,
           activity,
         ] = await Promise.all([
           countBooksFinishedInYear(user.id, CURRENT_YEAR),
@@ -118,7 +171,6 @@ export function Home() {
           getGoalForPeriod(user.id, 'week', WEEK_KEY),
           getReadDaysThisWeek(user.id, WEEK_KEY),
           getStreak(user.id),
-          getRecommendations(user.id, 5),
           getRecentCircleActivity(user.id),
         ])
 
@@ -132,7 +184,6 @@ export function Home() {
         setWeekGoal(weekGoalRow)
         setWeekDaysRead(daysRead)
         setStreak(readingStreak)
-        setRecommendations(recs)
         setCircleActivity(activity)
         setState('loaded')
       } catch (err) {
@@ -144,6 +195,34 @@ export function Home() {
     }
 
     void load()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  // Recommendations load on their own timeline, separate from everything
+  // above — getRecommendations does real external Open Library lookups
+  // (genre, bestseller, and same-author discovery, plus an enrichment
+  // pass on the final picks) that can take meaningfully longer than the
+  // rest of this page's plain Supabase reads. Blocking the whole
+  // dashboard on the slowest single section made the entire page feel
+  // slow to open even though most of it was ready almost instantly — the
+  // owner's own words were "load the first one first." Everything else
+  // above renders as soon as it's ready; this section shows its own
+  // skeleton (see the render below) until this resolves independently.
+  useEffect(() => {
+    let cancelled = false
+    if (!user) return
+    getRecommendations(user.id, 5)
+      .then((recs) => {
+        if (!cancelled) setRecommendations(recs)
+      })
+      .catch(() => {
+        // A failed recommendations fetch shouldn't block or error out the
+        // rest of an otherwise-working dashboard — just show the section's
+        // own empty state instead of a spinner that never resolves.
+        if (!cancelled) setRecommendations([])
+      })
     return () => {
       cancelled = true
     }
@@ -241,7 +320,7 @@ export function Home() {
   }
 
   if (state === 'loading') {
-    return <p className="font-sans text-muted">Loading your dashboard.</p>
+    return <HomeSkeleton />
   }
 
   if (state === 'error') {
@@ -526,7 +605,17 @@ export function Home() {
             See all
           </Link>
         </div>
-        {recommendations.length === 0 ? (
+        {recommendations === null ? (
+          // Its own skeleton, independent of the rest of the page — see
+          // the recommendations-loading effect's own comment for why this
+          // section can still be loading well after everything else above
+          // it has already rendered.
+          <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[178px] w-[132px] flex-none" />
+            ))}
+          </div>
+        ) : recommendations.length === 0 ? (
           <p className="font-sans text-sm text-muted">Nothing to show yet.</p>
         ) : (
           <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2">

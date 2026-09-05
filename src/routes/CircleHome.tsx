@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { InviteCodeShare } from '../components/circles/InviteCodeShare'
 import { StartCircleReadForm } from '../components/circles/StartCircleReadForm'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import {
   getCircleById,
@@ -193,7 +194,27 @@ export function CircleHome() {
   }
 
   if (state === 'loading') {
-    return <p className="font-sans text-muted">Finding your circle…</p>
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-8">
+        <Skeleton className="h-7 w-40" />
+        <div>
+          <Skeleton className="mb-3 h-4 w-24" />
+          <div className="flex flex-wrap gap-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-9 w-28 rounded-full" />
+            ))}
+          </div>
+        </div>
+        <Skeleton className="h-32 w-full rounded-3xl" />
+        <div>
+          <Skeleton className="mb-3 h-5 w-24" />
+          <div className="flex flex-col gap-2.5">
+            <Skeleton className="h-12 w-3/4 rounded-[20px]" />
+            <Skeleton className="ml-auto h-12 w-2/3 rounded-[20px]" />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (state === 'not-found') {

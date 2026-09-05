@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import { getMyRatedBooks, type MyRatedBook } from '../lib/ratings/myBooks'
 
@@ -44,7 +45,26 @@ export function MyBooks() {
   }, [user])
 
   if (state === 'loading') {
-    return <p className="font-sans text-muted">Finding what you've rated.</p>
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Skeleton className="mb-1 h-7 w-64" />
+        <Skeleton className="mb-5 h-4 w-56" />
+        <ul className="flex flex-col gap-3">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="rounded-2xl bg-surface p-3.5 shadow-soft">
+              <div className="flex gap-3.5">
+                <Skeleton className="h-24 w-16 flex-none" />
+                <div className="min-w-0 flex-1 gap-1.5 py-1">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="mt-1.5 h-3 w-1/3" />
+                  <Skeleton className="mt-2 h-3.5 w-16" />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
   }
 
   if (state === 'error') {

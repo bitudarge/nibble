@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import {
   dismissRecommendation,
@@ -124,7 +125,28 @@ export function Recommendations() {
   }
 
   if (state === 'loading') {
-    return <p className="font-sans text-muted">Finding books for you.</p>
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Skeleton className="mb-1 h-7 w-56" />
+        <Skeleton className="mb-5 h-4 w-64" />
+        <Skeleton className="mb-5 h-12 w-full rounded-full" />
+        <ul className="flex flex-col gap-3.5">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="rounded-[22px] bg-surface p-3.5 shadow-soft">
+              <div className="flex gap-3.5">
+                <Skeleton className="h-[118px] w-20 flex-none" />
+                <div className="min-w-0 flex-1 gap-1.5 py-1">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="mt-1.5 h-3 w-1/3" />
+                  <Skeleton className="mt-2.5 h-3.5 w-full" />
+                  <Skeleton className="mt-1.5 h-3.5 w-5/6" />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
   }
 
   if (state === 'error') {
