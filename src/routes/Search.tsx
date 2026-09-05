@@ -202,7 +202,7 @@ export function Search() {
             key={mood}
             type="button"
             onClick={() => handleChipClick(mood)}
-            className="rounded-full bg-tint px-3.5 py-2 font-sans text-[13px] font-bold text-ink transition-transform active:scale-95"
+            className="rounded-full bg-surface px-3.5 py-2 font-sans text-[13px] font-bold text-ink shadow-soft transition-transform active:scale-95"
           >
             {mood}
           </button>

@@ -22,13 +22,13 @@ const SHELVES: { status: ShelfStatus; label: string }[] = [
 const NEXT_STATUS: Record<ShelfStatus, ShelfStatus> = {
   want_to_read: 'reading',
   reading: 'finished',
-  finished: 'want_to_read',
+  finished: 'reading',
 }
 
 const MOVE_LABEL: Record<ShelfStatus, string> = {
-  want_to_read: 'Start reading',
+  want_to_read: 'Start it',
   reading: 'Mark finished',
-  finished: 'Back to want to read',
+  finished: 'Read again',
 }
 
 export function Shelves() {
@@ -198,44 +198,68 @@ export function Shelves() {
           </Link>
         </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-3">
-          {shelfItems.map((item) => (
-            <li key={item.id}>
-              <Link to={`/book/${item.book_id}`}>
-                <BookCover
-                  coverUrl={item.books.cover_url}
-                  title={item.books.title}
-                  className="h-[172px] w-full"
-                />
-              </Link>
-              <div className="mb-1.5 h-[7px] rounded-b-md bg-line shadow-soft" />
-              <Link
-                to={`/book/${item.book_id}`}
-                className="block truncate font-display text-sm font-semibold text-ink"
-              >
-                {item.books.title}
-              </Link>
-              <p className="mb-2 truncate font-sans text-[11.5px] text-muted">
-                {item.books.author}
-              </p>
-              {item.status === 'reading' && (
-                <div className="mb-2">
-                  <ProgressControl
-                    currentPage={item.current_page ?? 0}
-                    pageCount={item.books.page_count}
-                    onSave={(page) => quickLogProgress(item, page)}
-                  />
+        <ul className="flex flex-col gap-3">
+          {shelfItems.map((item) => {
+            const pageCount = item.books.page_count
+            const currentPage = item.current_page ?? 0
+            const pct = pageCount ? Math.min(100, Math.round((currentPage / pageCount) * 100)) : 0
+            return (
+              <li key={item.id} className="rounded-[26px] bg-surface p-3.5 shadow-soft">
+                <div className="flex gap-3.5">
+                  <Link to={`/book/${item.book_id}`} className="flex-none">
+                    <BookCover
+                      coverUrl={item.books.cover_url}
+                      title={item.books.title}
+                      className="h-[104px] w-[70px]"
+                    />
+                  </Link>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <Link
+                      to={`/book/${item.book_id}`}
+                      className="block truncate font-display text-base font-semibold text-ink"
+                    >
+                      {item.books.title}
+                    </Link>
+                    <p className="mt-0.5 truncate font-sans text-xs text-muted">
+                      {item.books.author}
+                    </p>
+                    {item.status === 'reading' && pageCount && (
+                      <>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-tint">
+                          <div
+                            className="h-full rounded-full bg-sage"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 font-sans text-xs text-muted">
+                          page {currentPage} of {pageCount}
+                        </p>
+                      </>
+                    )}
+                    {item.status !== 'reading' && pageCount && (
+                      <p className="mt-1 font-sans text-xs text-muted">{pageCount} pages</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void moveTo(item, NEXT_STATUS[item.status])}
+                      className="btn-cta mt-2 self-start rounded-full bg-sage px-4 py-1.5 font-sans text-xs font-extrabold text-surface"
+                    >
+                      {MOVE_LABEL[item.status]}
+                    </button>
+                  </div>
                 </div>
-              )}
-              <button
-                type="button"
-                onClick={() => void moveTo(item, NEXT_STATUS[item.status])}
-                className="w-full rounded-full border-2 border-line bg-surface py-2 font-sans text-xs font-extrabold text-ink transition-transform active:scale-95"
-              >
-                {MOVE_LABEL[item.status]}
-              </button>
-            </li>
-          ))}
+                {item.status === 'reading' && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <ProgressControl
+                      currentPage={currentPage}
+                      pageCount={pageCount}
+                      onSave={(page) => quickLogProgress(item, page)}
+                    />
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>
