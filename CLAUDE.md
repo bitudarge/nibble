@@ -472,7 +472,7 @@ Six sections, one PR each:
    bottom tab bar. New logo/mascot art throughout, phone header now shows
    the full wordmark instead of just the bare mascot mark. Added 6 mascot
    expression poses (`src/assets/mascot/`, `src/components/brand/
-   Mascot.tsx`) for later sections, cropped and background-verified
+Mascot.tsx`) for later sections, cropped and background-verified
    transparent from the owner's sprite sheet. PR #39.
 1. Discover: personalized genre shelves. Below the existing search box
    and mood chips, one horizontal shelf of real books per genre the user
