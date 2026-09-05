@@ -10,7 +10,13 @@ import { ReviewEditor } from '../components/book/ReviewEditor'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { useAuth } from '../lib/auth/useAuth'
 import { enrichBook, getBookById } from '../lib/books/data'
-import { getMyCircles } from '../lib/circles/data'
+import {
+  getCircleReads,
+  getMemberProgressForBook,
+  getMyCircles,
+  startCircleRead,
+  type MemberProgress,
+} from '../lib/circles/data'
 import { getStreak, isStreakMilestone } from '../lib/goals/data'
 import { resolveDisplayIdentity } from '../lib/profile/identity'
 import {
@@ -22,14 +28,11 @@ import {
   type BareRating,
 } from '../lib/ratings/data'
 import {
-  getCircleReviewsForBook,
-  getOwnCircleReview,
   getOwnPrivateReview,
   getOwnPublicReview,
   getPublicReviews,
   saveReview,
   shareReviewToCircle,
-  type CircleReviewForBook,
 } from '../lib/reviews/data'
 import { logReadingProgress } from '../lib/sessions/data'
 import { getShelfItemForBook, setShelfStatus } from '../lib/shelf/data'
@@ -70,10 +73,14 @@ export function BookPage() {
   const [allTags, setAllTags] = useState<BookTag[]>([])
 
   const [myCircles, setMyCircles] = useState<Circle[]>([])
-  const [selectedCircleId, setSelectedCircleId] = useState<string>('')
-  const [circleReviews, setCircleReviews] = useState<CircleReviewForBook[]>([])
-  const [circleReview, setCircleReview] = useState<Review | null>(null)
-  const [circleTagIds, setCircleTagIds] = useState<string[]>([])
+  // Which of my circles (if any) are actively reading this book together,
+  // and who's where in it — mirrors the mockup's "Your circles" section
+  // exactly rather than the old circle-review composer this tab used to
+  // hold (posting/sharing a review to a circle still works fine from the
+  // Notes and Review tabs' own "share" actions).
+  const [readingTogether, setReadingTogether] = useState<{ circle: Circle; readId: string }[]>([])
+  const [memberProgress, setMemberProgress] = useState<MemberProgress[]>([])
+  const [addingToCircleId, setAddingToCircleId] = useState<string | null>(null)
 
   const [progressError, setProgressError] = useState<string | null>(null)
 
@@ -166,9 +173,19 @@ export function BookPage() {
           ),
         )
 
-        const circleIds = circles.map((c) => c.id)
-        setCircleReviews(await getCircleReviewsForBook(bookId, circleIds))
-        if (circles.length > 0 && circles[0]) setSelectedCircleId(circles[0].id)
+        // Which of my circles (if any) have this exact book as an active
+        // shared read, plus everyone's progress on it, for the "Your
+        // circle" tab below.
+        const readsPerCircle = await Promise.all(
+          circles.map((circle) => getCircleReads(circle.id).then((reads) => ({ circle, reads }))),
+        )
+        const matches = readsPerCircle.flatMap(({ circle, reads }) =>
+          reads
+            .filter((read) => read.book_id === bookId && read.status === 'active')
+            .map((read) => ({ circle, readId: read.id })),
+        )
+        setReadingTogether(matches)
+        setMemberProgress(matches.length > 0 ? await getMemberProgressForBook(bookId) : [])
 
         if (!cancelled) setState('loaded')
       } catch (err) {
@@ -184,29 +201,6 @@ export function BookPage() {
       cancelled = true
     }
   }, [bookId, user])
-
-  // Load the user's existing review for whichever circle is currently
-  // selected in the picker below — re-runs when they switch circles.
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadCircleReview() {
-      if (!user || !bookId || !selectedCircleId) {
-        setCircleReview(null)
-        setCircleTagIds([])
-        return
-      }
-      const review = await getOwnCircleReview(user.id, bookId, selectedCircleId)
-      if (cancelled) return
-      setCircleReview(review)
-      setCircleTagIds(review ? (await getTagsForReview(review.id)).map((tag) => tag.id) : [])
-    }
-
-    void loadCircleReview()
-    return () => {
-      cancelled = true
-    }
-  }, [bookId, user, selectedCircleId])
 
   async function handleShelfChange(status: ShelfStatus) {
     if (!user || !bookId) return
@@ -271,15 +265,22 @@ export function BookPage() {
 
   async function handleShareToCircle(circleId: string, body: string) {
     if (!user || !bookId) return
-    const shared = await shareReviewToCircle(user.id, bookId, circleId, body)
-    if (shared.circle_id === selectedCircleId) {
-      setCircleReview(shared)
+    await shareReviewToCircle(user.id, bookId, circleId, body)
+  }
+
+  async function handleAddToCircle(circle: Circle) {
+    if (!bookId) return
+    setAddingToCircleId(circle.id)
+    setError(null)
+    try {
+      const read = await startCircleRead(circle.id, bookId, null)
+      setReadingTogether((prev) => [...prev, { circle, readId: read.id }])
+      setMemberProgress(await getMemberProgressForBook(bookId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add that to the circle.')
+    } finally {
+      setAddingToCircleId(null)
     }
-    const refreshed = await getCircleReviewsForBook(
-      bookId,
-      myCircles.map((c) => c.id),
-    )
-    setCircleReviews(refreshed)
   }
 
   async function handleLogProgress(toPage: number) {
@@ -466,66 +467,69 @@ export function BookPage() {
               </Link>
               .
             </p>
+          ) : readingTogether.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {readingTogether.map(({ circle, readId }) => (
+                <Link
+                  key={readId}
+                  to={`/circles/${circle.id}`}
+                  className="block rounded-2xl bg-tint p-3.5 transition-transform active:scale-[.985]"
+                >
+                  <span className="mb-1 block font-sans text-[11px] font-bold tracking-wide text-sage uppercase">
+                    Reading this together
+                  </span>
+                  <span className="mb-3 block font-display text-base font-semibold text-ink">
+                    {circle.name}
+                  </span>
+                  <ul className="flex flex-col gap-2.5">
+                    {memberProgress.map((progress) => (
+                      <li key={progress.id} className="flex items-center gap-2.5">
+                        <span className="w-16 flex-none truncate font-sans text-xs font-bold text-muted">
+                          {progress.profiles.id === user?.id
+                            ? 'You'
+                            : progress.profiles.display_name}
+                        </span>
+                        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-surface">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.min(progress.percent_complete ?? 0, 100)}%`,
+                              background:
+                                progress.profiles.id === user?.id
+                                  ? 'var(--nibbles-ink)'
+                                  : 'var(--nibbles-sage)',
+                            }}
+                          />
+                        </div>
+                        <span className="w-9 flex-none text-right font-sans text-xs font-bold text-muted">
+                          {Math.round(progress.percent_complete ?? 0)}%
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Link>
+              ))}
+              <p className="font-sans text-xs text-muted">
+                Nobody sees your exact page unless you share it.
+              </p>
+            </div>
           ) : (
-            <>
-              {circleReviews.length === 0 ? (
-                <p className="mb-3 font-sans text-sm text-muted">
-                  No circle reviews of this book yet.
-                </p>
-              ) : (
-                <ul className="mb-3 flex flex-col gap-2">
-                  {circleReviews.map((review) => (
-                    <ReviewCard
-                      key={review.id}
-                      review={review}
-                      byline={`${review.profiles.display_name} in ${review.circles.name}`}
-                      currentUserId={user?.id}
-                      currentUserDisplayName={currentUserDisplayName}
-                    />
-                  ))}
-                </ul>
-              )}
-
-              {user && (
-                <div>
-                  <label className="mb-2 flex items-center gap-2 font-sans text-sm text-ink">
-                    Post a review to
-                    <select
-                      value={selectedCircleId}
-                      onChange={(e) => setSelectedCircleId(e.target.value)}
-                      className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
-                    >
-                      {myCircles.map((circle) => (
-                        <option key={circle.id} value={circle.id}>
-                          {circle.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedCircleId && (
-                    <ReviewEditor
-                      key={selectedCircleId}
-                      bookId={book.id}
-                      userId={user.id}
-                      visibility="circle"
-                      circleId={selectedCircleId}
-                      existingReview={circleReview}
-                      existingTagIds={circleTagIds}
-                      allTags={allTags}
-                      showTagPicker={false}
-                      onSaved={(review, tagIds) => {
-                        setCircleReview(review)
-                        setCircleTagIds(tagIds)
-                        void getCircleReviewsForBook(
-                          book.id,
-                          myCircles.map((c) => c.id),
-                        ).then(setCircleReviews)
-                      }}
-                    />
-                  )}
-                </div>
-              )}
-            </>
+            <div className="flex flex-col gap-3">
+              <p className="font-sans text-sm text-muted">
+                None of your circles are reading this yet.
+              </p>
+              {myCircles.map((circle) => (
+                <button
+                  key={circle.id}
+                  type="button"
+                  onClick={() => void handleAddToCircle(circle)}
+                  disabled={addingToCircleId === circle.id}
+                  className="rounded-full border-2 border-line bg-surface py-2.5 font-sans text-sm font-extrabold text-ink transition-transform active:scale-95 disabled:opacity-60"
+                >
+                  {addingToCircleId === circle.id ? 'Adding…' : `Add to ${circle.name}`}
+                </button>
+              ))}
+            </div>
           )}
         </section>
       )}
