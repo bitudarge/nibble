@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
 import { ProgressControl } from '../components/book/ProgressControl'
 import { Logo } from '../components/brand/Logo'
+import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { useAuth } from '../lib/auth/useAuth'
 import { getStreak, isStreakMilestone } from '../lib/goals/data'
@@ -178,18 +179,11 @@ export function Shelves() {
 
       {shelfItems.length === 0 ? (
         <div className="rounded-3xl bg-tint px-5 py-8 text-center">
-          {/* Static now (was an animated wiggle) — the owner found the
-              constant motion on an empty shelf distracting rather than
-              charming. */}
-          <svg width="60" height="60" viewBox="0 0 96 96" aria-hidden className="mx-auto">
-            <path
-              d="M30 78 C24 48 44 30 62 38"
-              fill="none"
-              stroke="var(--nibbles-sage)"
-              strokeWidth="14"
-              strokeLinecap="round"
-            />
-          </svg>
+          {/* A cheerful mascot pose inviting the reader to go discover
+              something, replacing the plain line-drawing swoosh — static,
+              not animated, the owner found constant motion on an empty
+              shelf distracting rather than charming (round 3). */}
+          <Mascot pose="idea" alt="" className="mx-auto h-20" />
           <div className="mt-2 font-display text-lg font-semibold text-ink">
             Nothing on this shelf yet
           </div>
