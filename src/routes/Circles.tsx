@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { InviteCodeShare } from '../components/circles/InviteCodeShare'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import {
   createCircle,
@@ -158,7 +159,19 @@ export function Circles() {
         </p>
       )}
 
-      {state === 'loading' && <p className="font-sans text-muted">Finding your circles…</p>}
+      {state === 'loading' && (
+        <ul className="mb-6 flex flex-col gap-3">
+          {[0, 1].map((i) => (
+            <li key={i} className="rounded-3xl bg-surface p-4 shadow-soft">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-7 w-16 rounded-full" />
+              </div>
+              <Skeleton className="mt-2 h-3 w-40" />
+            </li>
+          ))}
+        </ul>
+      )}
 
       {state === 'error' && !error && (
         <p className="font-sans text-muted">Something went wrong loading your circles.</p>

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
-import { Logo } from '../components/brand/Logo'
 import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { PageLogSheet } from '../components/dashboard/PageLogSheet'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import { enrichBook } from '../lib/books/data'
 import { getStreak, isStreakMilestone } from '../lib/goals/data'
@@ -146,11 +146,22 @@ export function Shelves() {
 
   if (state === 'loading') {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
-        <div style={{ animation: 'nib-wig 2.6s ease-in-out infinite', transformOrigin: '50% 80%' }}>
-          <Logo variant="mark" className="h-16" />
-        </div>
-        <p className="font-sans text-sm text-muted">Finding your shelves.</p>
+      <div className="mx-auto max-w-3xl">
+        <Skeleton className="mb-4 h-8 w-40" />
+        <Skeleton className="mb-5 h-12 w-full rounded-full" />
+        <ul className="flex flex-col gap-3">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="flex gap-3.5 rounded-[26px] bg-surface p-3.5 shadow-soft">
+              <Skeleton className="h-[104px] w-[70px] flex-none" />
+              <div className="flex min-w-0 flex-1 flex-col gap-2 py-1">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="mt-2 h-2 w-full" />
+                <Skeleton className="mt-2 h-8 w-28 rounded-full" />
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     )
   }

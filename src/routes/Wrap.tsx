@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Skeleton } from '../components/layout/Skeleton'
 import { getMyCircles } from '../lib/circles/data'
 import {
   countBooksFinishedInPeriod,
@@ -360,7 +361,23 @@ export function Wrap() {
         )}
       </section>
 
-      {state === 'loading' && <p className="font-sans text-muted">Building your wrap…</p>}
+      {state === 'loading' && (
+        <div className="flex flex-col gap-6">
+          <div className="rounded-[22px] bg-surface p-4 shadow-soft">
+            <Skeleton className="mb-2.5 h-4 w-28" />
+            <div className="flex flex-col gap-2.5">
+              {[0, 1, 2].map((i) => (
+                <Skeleton key={i} className="h-3 w-full" />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-[22px]" />
+            ))}
+          </div>
+        </div>
+      )}
 
       {state === 'error' && (
         <div className="rounded-2xl border border-line bg-surface p-4 font-sans text-ink shadow-soft">
