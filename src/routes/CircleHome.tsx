@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { InviteCodeShare } from '../components/circles/InviteCodeShare'
 import { StartCircleReadForm } from '../components/circles/StartCircleReadForm'
 import { useAuth } from '../lib/auth/useAuth'
 import {
@@ -7,16 +8,15 @@ import {
   getCircleMembers,
   getCircleMessages,
   getCircleReads,
-  getCircleReviews,
-  getCircleShowcase,
   getMemberProgressForBook,
   postCircleMessage,
+  removeCircleMember,
+  removeCircleRead,
+  renameCircle,
   type CircleMemberWithProfile,
   type CircleMessageWithAuthor,
   type CircleReadWithBook,
-  type CircleReviewWithDetails,
   type MemberProgress,
-  type ShowcaseItem,
 } from '../lib/circles/data'
 import type { Circle } from '../types/database'
 
@@ -58,14 +58,6 @@ function DiscussionIcon() {
   )
 }
 
-function ShowcaseIcon() {
-  return (
-    <svg {...iconProps} stroke="var(--nibbles-honey)">
-      <path d="M7 4h10v16l-5-3.4L7 20z" />
-    </svg>
-  )
-}
-
 export function CircleHome() {
   const { circleId } = useParams<{ circleId: string }>()
   const { user } = useAuth()
@@ -76,13 +68,22 @@ export function CircleHome() {
   const [circle, setCircle] = useState<Circle | null>(null)
   const [members, setMembers] = useState<CircleMemberWithProfile[]>([])
   const [messages, setMessages] = useState<CircleMessageWithAuthor[]>([])
-  const [reviews, setReviews] = useState<CircleReviewWithDetails[]>([])
   const [reads, setReads] = useState<CircleReadWithBook[]>([])
-  const [showcase, setShowcase] = useState<ShowcaseItem[]>([])
   const [progressByBook, setProgressByBook] = useState<Record<string, MemberProgress[]>>({})
 
   const [newMessage, setNewMessage] = useState('')
   const [posting, setPosting] = useState(false)
+
+  // "Treat the whole circle like a normal groupchat" — a name edit and an
+  // "add members" share panel, both reveal-on-click rather than sitting
+  // permanently open, same shape as this app's other edit-in-place UI
+  // (the private note editor, review composer).
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null)
+  const [removingReadId, setRemovingReadId] = useState<string | null>(null)
 
   // Fetches everything for a circle and updates state — no synchronous
   // setState at the top (every setState here happens after an await), so
@@ -96,20 +97,16 @@ export function CircleHome() {
       return
     }
 
-    const [membersData, messagesData, reviewsData, readsData, showcaseData] = await Promise.all([
+    const [membersData, messagesData, readsData] = await Promise.all([
       getCircleMembers(cid),
       getCircleMessages(cid),
-      getCircleReviews(cid),
       getCircleReads(cid),
-      getCircleShowcase(cid),
     ])
 
     setCircle(found)
     setMembers(membersData)
     setMessages(messagesData)
-    setReviews(reviewsData)
     setReads(readsData)
-    setShowcase(showcaseData)
 
     const progressEntries = await Promise.all(
       readsData.map(
@@ -150,6 +147,51 @@ export function CircleHome() {
     }
   }
 
+  function startEditingName() {
+    if (!circle) return
+    setNameDraft(circle.name)
+    setEditingName(true)
+  }
+
+  async function handleSaveName(e: FormEvent) {
+    e.preventDefault()
+    if (!circle || !nameDraft.trim()) return
+    setSavingName(true)
+    try {
+      const updated = await renameCircle(circle.id, nameDraft.trim())
+      setCircle(updated)
+      setEditingName(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not rename this circle.')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  async function handleRemoveMember(memberRowId: string) {
+    setRemovingMemberId(memberRowId)
+    try {
+      await removeCircleMember(memberRowId)
+      setMembers((prev) => prev.filter((m) => m.id !== memberRowId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove that member.')
+    } finally {
+      setRemovingMemberId(null)
+    }
+  }
+
+  async function handleRemoveRead(circleReadId: string) {
+    setRemovingReadId(circleReadId)
+    try {
+      await removeCircleRead(circleReadId)
+      setReads((prev) => prev.filter((r) => r.id !== circleReadId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove that book.')
+    } finally {
+      setRemovingReadId(null)
+    }
+  }
+
   if (state === 'loading') {
     return <p className="font-sans text-muted">Finding your circle…</p>
   }
@@ -170,16 +212,55 @@ export function CircleHome() {
     )
   }
 
+  const isOwner = members.find((m) => m.user_id === user?.id)?.role === 'owner'
+
   return (
     <div
-      className="mx-auto flex max-w-3xl flex-col gap-8"
+      className="mx-auto flex max-w-3xl flex-col gap-8 pb-28"
       style={{ animation: 'nib-in 0.26s ease both' }}
     >
       <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">{circle.name}</h1>
-        <p className="mt-1 font-sans text-sm text-muted">
-          Invite code <span className="font-bold text-ink">{circle.join_code}</span>
-        </p>
+        {editingName ? (
+          <form onSubmit={(e) => void handleSaveName(e)} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              autoFocus
+              disabled={savingName}
+              aria-label="Circle name"
+              className="min-w-0 flex-1 rounded-full border border-line bg-surface px-4 py-2 font-display text-xl font-semibold text-ink outline-none"
+            />
+            <button
+              type="submit"
+              disabled={savingName || !nameDraft.trim()}
+              className="rounded-full bg-sage px-4 py-2 font-sans text-sm font-bold text-surface disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingName(false)}
+              disabled={savingName}
+              className="rounded-full bg-tint px-4 py-2 font-sans text-sm font-bold text-ink"
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-2xl font-semibold text-ink">{circle.name}</h1>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={startEditingName}
+                className="font-sans text-xs font-bold text-muted underline transition-opacity active:opacity-60"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {error && (
@@ -189,9 +270,23 @@ export function CircleHome() {
       )}
 
       <section>
-        <h2 className="mb-3 font-sans text-sm font-bold tracking-wide text-muted uppercase">
-          Members ({members.length})
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="font-sans text-sm font-bold tracking-wide text-muted uppercase">
+            Members ({members.length})
+          </h2>
+          <button
+            type="button"
+            onClick={() => setShowInvite((prev) => !prev)}
+            className="font-sans text-xs font-bold text-sage underline transition-opacity active:opacity-60"
+          >
+            {showInvite ? 'Hide invite code' : 'Add members'}
+          </button>
+        </div>
+        {showInvite && (
+          <div className="mb-3">
+            <InviteCodeShare circleName={circle.name} joinCode={circle.join_code} />
+          </div>
+        )}
         <ul className="flex flex-wrap gap-2">
           {members.map((member) => (
             <li
@@ -211,8 +306,20 @@ export function CircleHome() {
               <span className="font-sans text-sm font-bold text-ink">
                 {member.profiles.display_name}
               </span>
-              {member.role === 'owner' && (
+              {member.role === 'owner' ? (
                 <span className="font-sans text-xs text-muted">owner</span>
+              ) : (
+                isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveMember(member.id)}
+                    disabled={removingMemberId === member.id}
+                    aria-label={`Remove ${member.profiles.display_name}`}
+                    className="font-sans text-xs font-bold text-muted underline transition-opacity active:opacity-60 disabled:opacity-50"
+                  >
+                    {removingMemberId === member.id ? 'Removing…' : 'Remove'}
+                  </button>
+                )
               )}
             </li>
           ))}
@@ -239,7 +346,7 @@ export function CircleHome() {
                         : 'linear-gradient(160deg, var(--nibbles-sage), var(--nibbles-sage-deep))',
                     }}
                   />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <span className="block font-sans text-[11px] font-bold tracking-wide text-sage uppercase">
                       Reading together
                     </span>
@@ -250,6 +357,18 @@ export function CircleHome() {
                       {read.books.title}
                     </Link>
                   </div>
+                  {/* Any member can drop a book the circle's done with —
+                      same "treat it like a normal groupchat" reasoning as
+                      member management below, not owner-restricted. */}
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveRead(read.id)}
+                    disabled={removingReadId === read.id}
+                    aria-label={`Stop reading ${read.books.title} together`}
+                    className="flex-none font-sans text-xs font-bold text-muted underline transition-opacity active:opacity-60 disabled:opacity-50"
+                  >
+                    {removingReadId === read.id ? 'Removing…' : 'Remove'}
+                  </button>
                 </div>
                 {read.target_finish_date && (
                   <p className="mt-0.5 mb-3 font-sans text-xs text-muted">
@@ -292,29 +411,6 @@ export function CircleHome() {
 
       <section>
         <SectionHeading icon={<DiscussionIcon />}>Chatter</SectionHeading>
-        <form
-          onSubmit={(e) => void handlePostMessage(e)}
-          className="mb-4 flex items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-soft"
-        >
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Say something kind"
-            aria-label="Message"
-            className="h-10 min-w-0 flex-1 border-none bg-transparent font-sans text-sm text-ink outline-none placeholder:text-muted"
-          />
-          <button
-            type="submit"
-            disabled={!newMessage.trim() || posting}
-            aria-label="Post"
-            className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-sage text-surface transition-transform active:scale-90 disabled:opacity-50"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M4 20l16-8L4 4v6l10 2-10 2z" fill="currentColor" />
-            </svg>
-          </button>
-        </form>
         {messages.length === 0 ? (
           <p className="font-sans text-sm text-muted">No messages yet. Say hello.</p>
         ) : (
@@ -360,74 +456,42 @@ export function CircleHome() {
         )}
       </section>
 
-      <section>
-        <h2 className="mb-3 font-sans text-sm font-bold tracking-wide text-muted uppercase">
-          Circle reviews
-        </h2>
-        {reviews.length === 0 ? (
-          <p className="font-sans text-sm text-muted">No circle-only reviews yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2.5">
-            {reviews.map((review) => (
-              <li key={review.id} className="rounded-2xl bg-surface p-3.5 shadow-soft">
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  <Link
-                    to={`/book/${review.book_id}`}
-                    className="font-display text-sm font-semibold text-ink"
-                  >
-                    {review.books.title}
-                  </Link>
-                  <span className="font-sans text-xs text-muted">
-                    by {review.profiles.display_name}
-                  </span>
-                </div>
-                <p className="mt-1.5 font-sans text-sm whitespace-pre-wrap text-ink">
-                  {review.body}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section>
-        <SectionHeading icon={<ShowcaseIcon />}>Showcase</SectionHeading>
-        {showcase.length === 0 ? (
-          <p className="font-sans text-sm text-muted">No finished books to show yet.</p>
-        ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {showcase.map((item) => (
-              <li key={item.id}>
-                <Link to={`/book/${item.book_id}`} className="block">
-                  {item.books.cover_url ? (
-                    <img
-                      src={item.books.cover_url}
-                      alt=""
-                      className="h-28 w-full rounded-xl object-cover shadow-soft"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-28 w-full items-center justify-center rounded-xl text-xs text-muted shadow-soft"
-                      style={{
-                        background:
-                          'repeating-linear-gradient(135deg, #E3F2D9 0 7px, #F6FAF3 7px 14px)',
-                      }}
-                    >
-                      No cover yet
-                    </div>
-                  )}
-                  <span className="mt-1.5 block font-display text-xs font-semibold text-ink">
-                    {item.books.title}
-                  </span>
-                  <span className="block font-sans text-xs text-muted">
-                    {item.profiles.display_name}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* A real groupchat's message box lives at the bottom of the
+          screen, not inline in the scrolling feed — the owner's own
+          words, "make the discussion type box be in the bottom like a
+          normal text." Fixed to the viewport (not just this section) so
+          it stays put while the rest of the page scrolls underneath it;
+          the page's own pb-28 above keeps the last message from hiding
+          behind it. Sits above the phone tab bar (which floats at
+          bottom-3) on mobile; docks to the very bottom on desktop, where
+          there's no tab bar to clear. */}
+      <form
+        onSubmit={(e) => void handlePostMessage(e)}
+        className="fixed inset-x-0 bottom-[84px] z-30 md:bottom-0"
+      >
+        <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 md:px-8">
+          <div className="flex flex-1 items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-lift">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Say something kind"
+              aria-label="Message"
+              className="h-10 min-w-0 flex-1 border-none bg-transparent font-sans text-sm text-ink outline-none placeholder:text-muted"
+            />
+            <button
+              type="submit"
+              disabled={!newMessage.trim() || posting}
+              aria-label="Post"
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-sage text-surface transition-transform active:scale-90 disabled:opacity-50"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M4 20l16-8L4 4v6l10 2-10 2z" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   )
 }
