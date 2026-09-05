@@ -78,7 +78,7 @@ body {
   color-scheme: light;
 }
 
-/* The thumb for ProgressControl's range-input progress bar (the track's
+/* The thumb for PageLogSheet's range-input progress slider (the track's
    fill color comes from an inline gradient set in the component itself,
    since it depends on the current percent; only the draggable handle's
    look lives here, native range-input thumbs can't be styled with plain
