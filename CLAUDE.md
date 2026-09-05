@@ -440,3 +440,107 @@ wrapper, and `discoverBooksForGenres` itself (mocked I/O) — 145 tests
 total, up from 131. Same UI-unverified caveat as everything else: this
 hasn't been clicked through by the owner in a real signed-in session, only
 lint/typecheck/format/test/build plus the direct API shape check above.
+
+## Round 4 (all sections merged and deployed, 2026-09-04)
+
+A full redesign round driven by an owner-supplied interactive HTML/CSS/JS
+mockup (`Nibbles App v4 (offline).html`, a self-contained single-file
+export with embedded fonts/images and its own tiny declarative-template
+runtime), a new mascot sprite sheet, and a new "Nibbles" wordmark logo.
+Organized into `docs/round4/master-plan.md` (same reason the other round
+docs exist, read it before touching round 4 code), with an explicit list
+of deviations the owner asked for that override the mockup's own design/
+behavior where they conflict.
+
+**Important methodology note for reading the mockup again later**: it's a
+pure visual/flow prototype with entirely fake data (a hardcoded name,
+static fixture ratings that never actually average anything, non-
+functional create/join-circle toasts, and an in-app "Preview app states"
+debug panel that's clearly design-handoff scaffolding). None of that fake-
+data machinery got ported, only its visual design system and navigation/
+interaction patterns, wired into this app's own real Supabase-backed data
+the same way every other page already is.
+
+Six sections, one PR each:
+
+0. Foundation: the mockup's own all-green palette (no pink/red/yellow
+   anywhere, sourced directly from its hex values into `src/index.css`),
+   "Baloo 2" as the new display font (replacing Lora), a `.btn-cta`
+   utility for its distinctive "3D pressable" primary-button treatment
+   (flat offset shadow that collapses on press, rolled out per screen as
+   each is touched rather than a one-shot sweep), and a floating rounded
+   bottom tab bar. New logo/mascot art throughout, phone header now shows
+   the full wordmark instead of just the bare mascot mark. Added 6 mascot
+   expression poses (`src/assets/mascot/`, `src/components/brand/
+Mascot.tsx`) for later sections, cropped and background-verified
+   transparent from the owner's sprite sheet. PR #39.
+1. Discover: personalized genre shelves. Below the existing search box
+   and mood chips, one horizontal shelf of real books per genre the user
+   picked on the taste quiz, reusing the recommender's own external-
+   discovery infrastructure (`searchOpenLibraryBySubject` +
+   `genreTagToSubjectSlug`) but rendering straight from raw search
+   results, no book row created until someone actually taps one. Each
+   shelf loads/fails independently. PR #43.
+2. Recs/Picks: a 2-tab split, "Recs" (unchanged) and "From circles"
+   (filtered to books with real circle-mate signal), no third "Short
+   reads" tab per explicit owner instruction. `Recommendation` now
+   exposes the `circleSignals` already computed internally during
+   scoring, plus a `hasCircleSignal` helper, so the UI filters honestly
+   without duplicating scoring logic. PR #42.
+3. Book detail page: restructured from one long scrolling page into four
+   tabs, About / Your circle / Your notes / Review. Every existing
+   behavior moved as-is (the first-rating overlay stays screen-wide and
+   tab-independent, notes keep round 3's read-only/edit split, "Write a
+   Review" keeps its reveal-on-click composer). Also added
+   `getBareRatings` (`src/lib/ratings/data.ts`): the Review tab's list
+   now shows a lightweight one-line entry for anyone who rated the book
+   but never published a public review, alongside full review cards —
+   ratings have always been globally readable by design, so this
+   surfaces already-public data rather than opening anything new. PR #44.
+4. Profile: a real, visible **Sign out** button directly on the profile/
+   You page (`Wrap.tsx`) — previously sign-out only existed in the
+   desktop-only hamburger menu, so there was no way to sign out at all
+   from a phone, a real gap on this app's primary surface. Also a one-tap
+   mascot avatar picker in `EditProfile.tsx` alongside the existing
+   photo-URL field. PR #40.
+5. Home: a new **rest-day banking** mechanic that protects a streak
+   across one missed day — not directly requested in words, but part of
+   implementing the mockup "as is", whose own version of this was
+   entirely fake (a single pre-seeded flag, no earning rule, a "Use it"
+   button that never touched the streak at all). Real semantics built
+   instead: `reading_streaks.rest_days_banked`, earned automatically
+   every 7-day streak milestone (capped at 2), consumed automatically by
+   the streak trigger when a session lands exactly one day after the
+   last one (a 2+ day gap still resets it regardless). No manual "use
+   it" button — the trigger already applies a banked day the moment it's
+   actually needed, so a button pretending to consume one ahead of time
+   would be exactly the black-box behavior this app avoids everywhere
+   else; the Home banner is purely informational, shown next to the new
+   "wrapped in a blanket with tea" mascot pose (read as a cozy day off).
+   Verified directly against the live database with a throwaway account:
+   built a streak to 7 (banks one), skipped exactly one day (continues,
+   bank spent), skipped two more with nothing banked (resets to 1), built
+   to 21 to confirm the 2-bank cap holds through repeated milestones.
+   Also replaced Shelves' empty-state line-drawing swoosh with the new
+   "idea" mascot pose. Migration `20260904000006_rest_day_banking.sql`.
+   PR #41.
+
+**Explicitly not ported from the mockup**: its hardcoded name and fake
+fixture ratings/reviews, non-functional create/join-circle toasts, and
+in-app "Preview app states" debug panel (all mockup/handoff scaffolding).
+Circles screens got no changes at all, per the owner's explicit "I really
+like the one we have right now." The mockup's persistent header streak-
+pill/"You" button and its shallow single-stack navigation model weren't
+adopted either — this app is a real multi-route React Router app with its
+own working back-navigation and an already-solid streak UI from round 3,
+not a single-page mockup's nav shortcuts.
+
+**Same UI-unverified caveat as every prior round.** No PR in this round
+was clicked through by the owner in a real signed-in browser session,
+testing was lint/typecheck/format/test/build plus targeted unit tests and
+(for the rest-day banking schema/trigger change) live database
+verification with a throwaway account. Treat round 4 as unverified in the
+browser too, especially: the new tab bar's touch behavior on a real
+phone, the mascot avatar picker's actual save/display, and the Discover
+genre shelves' real network behavior across several parallel Open Library
+requests on a slower connection.
