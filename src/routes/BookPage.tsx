@@ -311,7 +311,7 @@ export function BookPage() {
       }
     } catch (err) {
       setProgressError(err instanceof Error ? err.message : 'Could not log your progress.')
-      throw err // ProgressControl needs this to know the save failed and roll back its own display.
+      throw err // PageLogSheet needs this to know the save failed and keep the sheet open.
     }
   }
 
