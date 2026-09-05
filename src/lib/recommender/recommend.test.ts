@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { NO_REASON_YET_MESSAGE } from './scoring'
-import { hasCircleSignal, hasRealReason, needsFallback, topGenreAffinities } from './recommend'
+import {
+  hasCircleSignal,
+  hasRealReason,
+  needsFallback,
+  recentShelfAuthors,
+  topGenreAffinities,
+} from './recommend'
 import type { CircleSignal, TasteProfileData } from './types'
 
 function profile(overrides: Partial<TasteProfileData> = {}): TasteProfileData {
@@ -95,5 +101,40 @@ describe('hasRealReason', () => {
 
   it('is false for an empty reasons list', () => {
     expect(hasRealReason([])).toBe(false)
+  })
+})
+
+describe('recentShelfAuthors', () => {
+  function shelfItem(updatedAt: string, author: string | null) {
+    return { updated_at: updatedAt, books: { author } }
+  }
+
+  it('returns authors most-recently-updated first', () => {
+    const items = [
+      shelfItem('2026-01-01T00:00:00Z', 'Old Author'),
+      shelfItem('2026-01-03T00:00:00Z', 'Newest Author'),
+      shelfItem('2026-01-02T00:00:00Z', 'Middle Author'),
+    ]
+    expect(recentShelfAuthors(items)).toEqual(['Newest Author', 'Middle Author', 'Old Author'])
+  })
+
+  it('dedupes the same author, keeping only their most recent appearance', () => {
+    const items = [
+      shelfItem('2026-01-01T00:00:00Z', 'Same Author'),
+      shelfItem('2026-01-02T00:00:00Z', 'Same Author'),
+    ]
+    expect(recentShelfAuthors(items)).toEqual(['Same Author'])
+  })
+
+  it('skips shelf items with no known author', () => {
+    const items = [
+      shelfItem('2026-01-01T00:00:00Z', null),
+      shelfItem('2026-01-02T00:00:00Z', 'Known Author'),
+    ]
+    expect(recentShelfAuthors(items)).toEqual(['Known Author'])
+  })
+
+  it('returns an empty list for an empty shelf', () => {
+    expect(recentShelfAuthors([])).toEqual([])
   })
 })
