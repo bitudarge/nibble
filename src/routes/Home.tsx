@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
-import { ProgressControl } from '../components/book/ProgressControl'
 import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
+import { PageLogSheet } from '../components/dashboard/PageLogSheet'
 import { ProgressRing } from '../components/dashboard/ProgressRing'
 import { CirclesIcon, RecsIcon } from '../components/layout/navIcons'
 import { useAuth } from '../lib/auth/useAuth'
@@ -28,31 +28,15 @@ import type { ReadingGoal, ReadingStreak } from '../types/database'
 type LoadState = 'loading' | 'error' | 'loaded'
 
 const CURRENT_YEAR = new Date().getFullYear()
-const STREAK_DOTS = 7
 const WEEK_DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 // Computed once per module load, not per render — the "current" month/week
 // genuinely only changes at a real calendar boundary, no need to
 // recompute it on every re-render.
 const MONTH_KEY = getMonthPeriodKey(new Date())
 const WEEK_KEY = getIsoWeekPeriodKey(new Date())
-
-function FlameIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12 2.5c3.2 3 5.5 5.6 5.5 9.1A5.5 5.5 0 016.5 11.6c0-1.6.7-2.9 1.8-4.2.3 1.5 1 2.3 2 2.6-.6-2.8.2-5.4 1.7-7.5z" />
-    </svg>
-  )
-}
+// Monday-first index of today, matching daysReadFromSessionDates' own
+// Monday-anchored bucketing (getDay() is Sunday-first, so shift it).
+const TODAY_WEEK_INDEX = (new Date().getDay() + 6) % 7
 
 function LeafIcon({ className = '' }: { className?: string }) {
   return (
@@ -96,11 +80,8 @@ export function Home() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
   const [recordingStreak, setRecordingStreak] = useState(false)
-  // Toggled briefly on tap to trigger the nib-pop bounce (see index.css) —
-  // a class flip rather than a CSS transition, since the same value needs
-  // to be re-triggerable on every tap, not just the first.
-  const [streakPop, setStreakPop] = useState(false)
-  const popTimeoutRef = useRef<number | null>(null)
+  const [logSheetOpen, setLogSheetOpen] = useState(false)
+  const [logSheetItemId, setLogSheetItemId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -163,12 +144,6 @@ export function Home() {
     }
   }, [user])
 
-  useEffect(() => {
-    return () => {
-      if (popTimeoutRef.current !== null) window.clearTimeout(popTimeoutRef.current)
-    }
-  }, [])
-
   async function quickLogProgress(item: ShelfItemWithBook, toPage: number) {
     if (!user) return
     const streakBefore = streak?.current_streak ?? 0
@@ -212,17 +187,12 @@ export function Home() {
   // server-side streak trigger to count today, without touching the
   // book's actual progress.
   async function recordStreakToday() {
-    if (!user || currentlyReading.length === 0) return
+    if (!user || currentlyReading.length === 0 || weekDaysRead[TODAY_WEEK_INDEX]) return
     const item = currentlyReading[0]
     if (!item) return
     const streakBefore = streak?.current_streak ?? 0
     setRecordingStreak(true)
     setError(null)
-    // The bounce fires immediately on tap, before the network round-trip,
-    // it's acknowledging the tap itself, not the save succeeding.
-    if (popTimeoutRef.current !== null) window.clearTimeout(popTimeoutRef.current)
-    setStreakPop(true)
-    popTimeoutRef.current = window.setTimeout(() => setStreakPop(false), 420)
     try {
       const page = item.current_page ?? 0
       await logReadingProgress(user.id, item.book_id, page, page, item.books.page_count)
@@ -253,7 +223,6 @@ export function Home() {
     )
   }
 
-  const currentStreak = streak?.current_streak ?? 0
   const { displayName } = resolveDisplayIdentity(user, profile)
   const firstName = displayName.split(' ')[0] || 'there'
   const weekPct = weekGoal
@@ -310,123 +279,103 @@ export function Home() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {currentlyReading.map((item) => {
-            const pageCount = item.books.page_count
-            const currentPage = item.current_page ?? 0
-            const pct = pageCount ? Math.min(100, Math.round((currentPage / pageCount) * 100)) : 0
-            const pagesLeft = pageCount ? Math.max(0, pageCount - currentPage) : null
-            return (
-              <div key={item.id} className="rounded-[30px] bg-surface p-4.5 shadow-soft">
-                <div className="mb-4 flex gap-4">
-                  <Link to={`/book/${item.book_id}`} className="flex-none">
-                    <BookCover
-                      coverUrl={item.books.cover_url}
-                      title={item.books.title}
-                      className="h-[130px] w-[86px] shadow-lift"
-                    />
+        (() => {
+          const hero = currentlyReading[0]
+          if (!hero) return null
+          const pageCount = hero.books.page_count
+          const currentPage = hero.current_page ?? 0
+          const pct = pageCount ? Math.min(100, Math.round((currentPage / pageCount) * 100)) : 0
+          const pagesLeft = pageCount ? Math.max(0, pageCount - currentPage) : null
+          return (
+            <div className="rounded-[30px] bg-surface p-4.5 shadow-soft">
+              <div className="mb-4 flex gap-4">
+                <Link to={`/book/${hero.book_id}`} className="flex-none">
+                  <BookCover
+                    coverUrl={hero.books.cover_url}
+                    title={hero.books.title}
+                    className="h-[130px] w-[86px] shadow-lift"
+                  />
+                </Link>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="mb-1 font-sans text-[11px] font-bold tracking-wide text-sage uppercase">
+                    Still nibbling
+                  </span>
+                  <Link
+                    to={`/book/${hero.book_id}`}
+                    className="block truncate font-display text-lg font-semibold text-ink"
+                  >
+                    {hero.books.title}
                   </Link>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="mb-1 font-sans text-[11px] font-bold tracking-wide text-sage uppercase">
-                      Still nibbling
-                    </span>
-                    <Link
-                      to={`/book/${item.book_id}`}
-                      className="block truncate font-display text-lg font-semibold text-ink"
-                    >
-                      {item.books.title}
-                    </Link>
-                    <p className="mt-0.5 truncate font-sans text-sm text-muted">
-                      {item.books.author}
+                  <p className="mt-0.5 truncate font-sans text-sm text-muted">
+                    {hero.books.author}
+                  </p>
+                  {pagesLeft !== null && (
+                    <p className="mt-auto font-sans text-[13px] font-bold text-sage-deep">
+                      {pagesLeft} pages left · about {eveningsLeft(pagesLeft)} evening
+                      {eveningsLeft(pagesLeft) === 1 ? '' : 's'}
                     </p>
-                    {pagesLeft !== null && (
-                      <p className="mt-auto font-sans text-[13px] font-bold text-sage-deep">
-                        {pagesLeft} pages left · about {eveningsLeft(pagesLeft)} evening
-                        {eveningsLeft(pagesLeft) === 1 ? '' : 's'}
-                      </p>
-                    )}
-                  </div>
+                  )}
                 </div>
-                {pageCount && (
-                  <div className="mb-4 h-3 overflow-hidden rounded-full bg-tint">
-                    <div
-                      className="h-full rounded-full transition-[width] duration-500 ease-out"
-                      style={{
-                        width: `${pct}%`,
-                        background:
-                          'linear-gradient(90deg, var(--nibbles-sage-deep), var(--nibbles-sage))',
-                      }}
-                    />
-                  </div>
-                )}
-                <ProgressControl
-                  currentPage={currentPage}
-                  pageCount={pageCount}
-                  onSave={(page) => quickLogProgress(item, page)}
-                />
               </div>
-            )
-          })}
-        </div>
+              {pageCount && (
+                <div className="mb-4 h-3 overflow-hidden rounded-full bg-tint">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-500 ease-out"
+                    style={{
+                      width: `${pct}%`,
+                      background:
+                        'linear-gradient(90deg, var(--nibbles-sage-deep), var(--nibbles-sage))',
+                    }}
+                  />
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogSheetItemId(hero.id)
+                    setLogSheetOpen(true)
+                  }}
+                  className="btn-cta flex-1 rounded-full bg-sage px-4 py-2.5 font-sans text-sm font-bold text-surface"
+                >
+                  Nibble a few pages
+                </button>
+                {currentlyReading.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogSheetItemId(null)
+                      setLogSheetOpen(true)
+                    }}
+                    className="flex-none rounded-full bg-tint px-4 py-2.5 font-sans text-xs font-extrabold text-sage-deep transition-transform active:scale-95"
+                  >
+                    +{currentlyReading.length - 1} more
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()
       )}
 
-      <div className="rounded-[22px] bg-honey-soft p-4 shadow-soft">
-        <div className="mb-1.5 font-sans text-[11.5px] font-bold tracking-wide text-honey-text uppercase">
-          Streak
-        </div>
-        <div className="font-sans text-3xl font-extrabold text-honey-text">{currentStreak}</div>
-        <div className="mt-0.5 font-sans text-[12.5px] font-semibold text-honey-text opacity-80">
-          day{currentStreak === 1 ? '' : 's'} in a row
-        </div>
-        {streak && streak.longest_streak > currentStreak && (
-          <div className="mt-1 font-sans text-[11px] text-honey-text opacity-70">
-            Best: {streak.longest_streak} days
-          </div>
-        )}
-        <div className="mt-2.5 flex gap-1">
-          {Array.from({ length: STREAK_DOTS }, (_, i) => {
-            const filled = i < Math.min(STREAK_DOTS, currentStreak)
-            // The very next dot (today's, once recorded) pulses gently
-            // to invite the tap below, so the button and the dots read
-            // as one connected gesture rather than two separate things.
-            const isNext = !filled && i === Math.min(STREAK_DOTS, currentStreak)
-            return (
-              <div
-                key={i}
-                className="h-[7px] flex-1 rounded-full"
-                style={{
-                  background: filled ? 'var(--nibbles-honey)' : 'rgba(138,94,27,.22)',
-                  animation: isNext ? 'nib-in 1.6s ease-in-out infinite alternate' : undefined,
-                }}
-              />
-            )
-          })}
-        </div>
-        {currentlyReading.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => void recordStreakToday()}
-            disabled={recordingStreak}
-            style={{ animation: streakPop ? 'nib-pop 0.42s ease' : undefined }}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-honey px-4 py-3 font-sans text-sm font-extrabold text-surface shadow-soft transition-transform active:scale-95 disabled:opacity-50"
-          >
-            <FlameIcon />
-            {recordingStreak ? 'Recording…' : 'I read today'}
-          </button>
-        ) : (
-          <p className="mt-3 font-sans text-[11px] text-honey-text opacity-70">
-            Start a book to record a streak day.
-          </p>
-        )}
-      </div>
+      {logSheetOpen && (
+        <PageLogSheet
+          items={currentlyReading}
+          initialItemId={logSheetItemId}
+          onClose={() => setLogSheetOpen(false)}
+          onSave={(item, page) => quickLogProgress(item, page)}
+        />
+      )}
 
-      <Link
-        to="/wrap"
-        className="block rounded-[30px] bg-surface p-4.5 shadow-soft transition-transform active:scale-[.985]"
-      >
+      <div className="rounded-[30px] bg-surface p-4.5 shadow-soft">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-semibold text-ink">Your goals</h2>
-          <span className="font-sans text-[12.5px] font-extrabold text-sage-deep">Adjust</span>
+          <Link
+            to="/wrap"
+            className="font-sans text-[12.5px] font-extrabold text-sage-deep transition-opacity active:opacity-60"
+          >
+            Adjust
+          </Link>
         </div>
         <div className="mb-4 flex items-center gap-4">
           <ProgressRing percent={weekPct}>
@@ -439,22 +388,40 @@ export function Home() {
           </ProgressRing>
           <div className="min-w-0 flex-1">
             <div className="mb-2 font-sans text-[11px] font-bold tracking-wide text-muted uppercase">
-              Days this week
+              Days this week · tap today's leaf to log a streak day
             </div>
             <div className="flex gap-1.5">
-              {WEEK_DAY_LABELS.map((label, i) => (
-                <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                  <div
-                    className="flex h-8 w-full items-center justify-center rounded-[10px]"
-                    style={{
-                      background: weekDaysRead[i] ? 'var(--nibbles-sage)' : 'var(--nibbles-line)',
-                    }}
-                  >
-                    {weekDaysRead[i] && <LeafIcon className="text-surface" />}
+              {WEEK_DAY_LABELS.map((label, i) => {
+                const isToday = i === TODAY_WEEK_INDEX
+                const read = weekDaysRead[i]
+                const cellStyle = {
+                  background: read ? 'var(--nibbles-sage)' : 'var(--nibbles-line)',
+                }
+                return (
+                  <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                    {isToday ? (
+                      <button
+                        type="button"
+                        onClick={() => void recordStreakToday()}
+                        disabled={recordingStreak || read || currentlyReading.length === 0}
+                        aria-label={read ? 'Today logged' : 'Log today as a reading day'}
+                        className="flex h-8 w-full items-center justify-center rounded-[10px] transition-transform active:scale-90 disabled:active:scale-100"
+                        style={cellStyle}
+                      >
+                        {read && <LeafIcon className="text-surface" />}
+                      </button>
+                    ) : (
+                      <div
+                        className="flex h-8 w-full items-center justify-center rounded-[10px]"
+                        style={cellStyle}
+                      >
+                        {read && <LeafIcon className="text-surface" />}
+                      </div>
+                    )}
+                    <span className="font-sans text-[9.5px] font-bold text-muted">{label}</span>
                   </div>
-                  <span className="font-sans text-[9.5px] font-bold text-muted">{label}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
@@ -489,7 +456,7 @@ export function Home() {
             </div>
           </div>
         </div>
-      </Link>
+      </div>
 
       {streak && streak.rest_days_banked > 0 && (
         <div className="flex items-center gap-3 rounded-[26px] bg-ink p-4">
