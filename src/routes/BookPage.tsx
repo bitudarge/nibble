@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { BareRatingRow } from '../components/book/BareRatingRow'
 import { BookHero } from '../components/book/BookHero'
 import { FirstRatingExperience } from '../components/book/FirstRatingExperience'
 import { PrivateNoteSummary } from '../components/book/PrivateNoteSummary'
@@ -13,9 +14,11 @@ import { getStreak, isStreakMilestone } from '../lib/goals/data'
 import { resolveDisplayIdentity } from '../lib/profile/identity'
 import {
   getAggregateRating,
+  getBareRatings,
   getUserRating,
   setRating,
   type AggregateRating,
+  type BareRating,
 } from '../lib/ratings/data'
 import {
   getCircleReviewsForBook,
@@ -33,6 +36,14 @@ import { getAllTags, getTagsForReview, setReviewTags } from '../lib/tags/data'
 import type { Book, BookTag, Circle, Review, ShelfItem, ShelfStatus } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded' | 'not-found'
+type Tab = 'about' | 'circle' | 'notes' | 'review'
+
+const TABS: { tab: Tab; label: string }[] = [
+  { tab: 'about', label: 'About' },
+  { tab: 'circle', label: 'Your circle' },
+  { tab: 'notes', label: 'Your notes' },
+  { tab: 'review', label: 'Review' },
+]
 
 export function BookPage() {
   const { bookId } = useParams<{ bookId: string }>()
@@ -54,6 +65,7 @@ export function BookPage() {
   const [privateTagIds, setPrivateTagIds] = useState<string[]>([])
   const [publicReview, setPublicReview] = useState<Review | null>(null)
   const [publicTagIds, setPublicTagIds] = useState<string[]>([])
+  const [bareRatings, setBareRatings] = useState<BareRating[]>([])
   const [allTags, setAllTags] = useState<BookTag[]>([])
 
   const [myCircles, setMyCircles] = useState<Circle[]>([])
@@ -81,6 +93,8 @@ export function BookPage() {
   // open, saving doesn't collapse it back.
   const [showReviewComposer, setShowReviewComposer] = useState(false)
 
+  const [activeTab, setActiveTab] = useState<Tab>('about')
+
   useEffect(() => {
     let cancelled = false
 
@@ -98,6 +112,7 @@ export function BookPage() {
       setShowNoteEditor(false)
       setShowFirstRatingFlow(false)
       setFirstRatingError(null)
+      setActiveTab('about')
       try {
         const foundBook = await getBookById(bookId)
         if (!foundBook) {
@@ -140,6 +155,15 @@ export function BookPage() {
         )
         setPublicTagIds(
           pub ? await getTagsForReview(pub.id).then((t) => t.map((tag) => tag.id)) : [],
+        )
+        // Everyone who rated this book but has no public review to show
+        // for it — see getBareRatings's doc comment for why this is safe
+        // to surface even though it's not the current user's own data.
+        setBareRatings(
+          await getBareRatings(
+            bookId,
+            pubReviews.map((r) => r.user_id),
+          ),
         )
 
         const circleIds = circles.map((c) => c.id)
@@ -322,19 +346,11 @@ export function BookPage() {
   return (
     <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
       {celebrationNode}
-      <BookHero
-        title={book.title}
-        author={book.author}
-        coverUrl={book.cover_url}
-        description={description}
-        categories={categories}
-        pageCount={book.page_count}
-        publishedYear={book.published_year}
-        aggregateLabel={aggregateLabel}
-        myRating={myRating}
-        onRatingChange={(v) => void handleRatingChange(v)}
-      />
 
+      {/* The immersive first-rating flow is a full-screen overlay, shown
+          regardless of which tab is active — it's triggered by rating
+          from the About tab, but it takes over the whole screen either
+          way, so which tab sits underneath it doesn't matter. */}
       {showFirstRatingFlow && (
         <FirstRatingExperience
           bookTitle={book.title}
@@ -352,62 +368,179 @@ export function BookPage() {
         </p>
       )}
 
-      {/* Shelf status, progress, and My Notes are grouped together: this is
-          the "my shelf entry for this book" part of the page. Reviewing
-          (public or circle) is a clearly separate, secondary action below,
-          see round 2's rating/review restructure. */}
-      <section className="mb-6 flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-soft">
-        <label className="flex items-center gap-2 font-sans text-sm text-ink">
-          Shelf
-          <select
-            value={shelfItem?.status ?? ''}
-            onChange={(e) => void handleShelfChange(e.target.value as ShelfStatus)}
-            className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
-          >
-            <option value="" disabled>
-              Add to a shelf
-            </option>
-            <option value="want_to_read">Want to read</option>
-            <option value="reading">Reading</option>
-            <option value="finished">Finished</option>
-          </select>
-        </label>
-
-        {shelfItem?.status === 'reading' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              value={progressInput}
-              onChange={(e) => setProgressInput(e.target.value)}
-              placeholder={`Page (${shelfItem.current_page ?? 0} so far)`}
-              className="w-36 rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
-            />
+      <div className="mb-5 flex gap-1.5 overflow-x-auto rounded-full bg-tint p-1.5">
+        {TABS.map(({ tab, label }) => {
+          const active = tab === activeTab
+          return (
             <button
+              key={tab}
               type="button"
-              onClick={() => void handleLogProgress()}
-              className="rounded-full bg-sage px-4 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95"
+              onClick={() => setActiveTab(tab)}
+              className={`h-10 flex-1 rounded-full font-sans text-[12px] font-extrabold whitespace-nowrap transition-all active:scale-95 ${
+                active ? 'bg-sage text-surface shadow-soft' : 'text-muted'
+              }`}
             >
-              Log progress
+              {label}
             </button>
-          </div>
-        )}
-      </section>
-      {progressError && <p className="mb-4 font-sans text-sm text-honey-text">{progressError}</p>}
+          )
+        })}
+      </div>
 
-      {user && (
-        <section className="mb-6 rounded-2xl bg-surface p-4 shadow-soft">
-          <h2 className="mb-1 font-display text-lg font-semibold text-ink">My Notes</h2>
+      {activeTab === 'about' && (
+        <div style={{ animation: 'nib-in 0.2s ease both' }}>
+          <BookHero
+            title={book.title}
+            author={book.author}
+            coverUrl={book.cover_url}
+            description={description}
+            categories={categories}
+            pageCount={book.page_count}
+            publishedYear={book.published_year}
+            aggregateLabel={aggregateLabel}
+            myRating={myRating}
+            onRatingChange={(v) => void handleRatingChange(v)}
+          />
+
+          {/* Shelf status and progress are "my shelf entry for this book",
+              grouped with the cover/rating/blurb above rather than with
+              reviewing, which lives in its own tab now. */}
+          <section className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4 shadow-soft">
+            <label className="flex items-center gap-2 font-sans text-sm text-ink">
+              Shelf
+              <select
+                value={shelfItem?.status ?? ''}
+                onChange={(e) => void handleShelfChange(e.target.value as ShelfStatus)}
+                className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
+              >
+                <option value="" disabled>
+                  Add to a shelf
+                </option>
+                <option value="want_to_read">Want to read</option>
+                <option value="reading">Reading</option>
+                <option value="finished">Finished</option>
+              </select>
+            </label>
+
+            {shelfItem?.status === 'reading' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  value={progressInput}
+                  onChange={(e) => setProgressInput(e.target.value)}
+                  placeholder={`Page (${shelfItem.current_page ?? 0} so far)`}
+                  className="w-36 rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleLogProgress()}
+                  className="rounded-full bg-sage px-4 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95"
+                >
+                  Log progress
+                </button>
+              </div>
+            )}
+          </section>
+          {progressError && (
+            <p className="mt-2 font-sans text-sm text-honey-text">{progressError}</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'circle' && (
+        <section
+          className="rounded-2xl bg-surface p-4 shadow-soft"
+          style={{ animation: 'nib-in 0.2s ease both' }}
+        >
+          <p className="mb-3 font-sans text-xs text-muted">Small rooms, not a public feed.</p>
+
+          {myCircles.length === 0 ? (
+            <p className="font-sans text-sm text-muted">
+              You're not in any circles yet.{' '}
+              <Link to="/circles" className="font-bold text-sage underline">
+                Create or join one
+              </Link>
+              .
+            </p>
+          ) : (
+            <>
+              {circleReviews.length === 0 ? (
+                <p className="mb-3 font-sans text-sm text-muted">
+                  No circle reviews of this book yet.
+                </p>
+              ) : (
+                <ul className="mb-3 flex flex-col gap-2">
+                  {circleReviews.map((review) => (
+                    <ReviewCard
+                      key={review.id}
+                      review={review}
+                      byline={`${review.profiles.display_name} in ${review.circles.name}`}
+                      currentUserId={user?.id}
+                      currentUserDisplayName={currentUserDisplayName}
+                    />
+                  ))}
+                </ul>
+              )}
+
+              {user && (
+                <div>
+                  <label className="mb-2 flex items-center gap-2 font-sans text-sm text-ink">
+                    Post a review to
+                    <select
+                      value={selectedCircleId}
+                      onChange={(e) => setSelectedCircleId(e.target.value)}
+                      className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
+                    >
+                      {myCircles.map((circle) => (
+                        <option key={circle.id} value={circle.id}>
+                          {circle.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {selectedCircleId && (
+                    <ReviewEditor
+                      key={selectedCircleId}
+                      bookId={book.id}
+                      userId={user.id}
+                      visibility="circle"
+                      circleId={selectedCircleId}
+                      existingReview={circleReview}
+                      existingTagIds={circleTagIds}
+                      allTags={allTags}
+                      showTagPicker={false}
+                      onSaved={(review, tagIds) => {
+                        setCircleReview(review)
+                        setCircleTagIds(tagIds)
+                        void getCircleReviewsForBook(
+                          book.id,
+                          myCircles.map((c) => c.id),
+                        ).then(setCircleReviews)
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {activeTab === 'notes' && user && (
+        <section
+          className="rounded-2xl bg-surface p-4 shadow-soft"
+          style={{ animation: 'nib-in 0.2s ease both' }}
+        >
           <p className="mb-3 font-sans text-xs text-muted">
             Just for you. Never public unless you share it to a circle.
           </p>
           {privateReview && !showNoteEditor ? (
             // Read-only once a note exists, matching "Write a Review"'s
-            // reveal-on-click shape below, tapping Edit reveals the same
-            // form the first-rating flow's save writes into. Avoids
-            // landing on a raw edit form every visit once there's already
-            // something saved, per the owner's "I don't want it to feel
-            // like the first time every time" request.
+            // reveal-on-click shape, tapping Edit reveals the same form
+            // the first-rating flow's save writes into. Avoids landing on
+            // a raw edit form every visit once there's already something
+            // saved, per the owner's "I don't want it to feel like the
+            // first time every time" request.
             <PrivateNoteSummary
               review={privateReview}
               tags={allTags.filter((tag) => privateTagIds.includes(tag.id))}
@@ -442,138 +575,80 @@ export function BookPage() {
         </section>
       )}
 
-      <section className="mb-6 rounded-2xl bg-surface p-4 shadow-soft">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="font-display text-lg font-semibold text-ink">Write a Review</h2>
-            <p className="font-sans text-xs text-muted">Optional, and public once you save it.</p>
+      {activeTab === 'review' && (
+        <section
+          className="rounded-2xl bg-surface p-4 shadow-soft"
+          style={{ animation: 'nib-in 0.2s ease both' }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-ink">Write a Review</h2>
+              <p className="font-sans text-xs text-muted">Optional, and public once you save it.</p>
+            </div>
+            {!showReviewComposer && (
+              <button
+                type="button"
+                onClick={() => setShowReviewComposer(true)}
+                className="flex-none rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink transition-transform active:scale-95"
+              >
+                {publicReview ? 'Edit review' : 'Write a review'}
+              </button>
+            )}
           </div>
-          {!showReviewComposer && (
-            <button
-              type="button"
-              onClick={() => setShowReviewComposer(true)}
-              className="flex-none rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink transition-transform active:scale-95"
-            >
-              {publicReview ? 'Edit review' : 'Write a review'}
-            </button>
+
+          {showReviewComposer && user && (
+            <div className="mt-3">
+              <ReviewEditor
+                bookId={book.id}
+                userId={user.id}
+                visibility="public"
+                existingReview={publicReview}
+                existingTagIds={publicTagIds}
+                allTags={allTags}
+                showTagPicker={false}
+                shareTargets={myCircles}
+                onShare={(circleId, body) => handleShareToCircle(circleId, body)}
+                onSaved={(review, tagIds) => {
+                  setPublicReview(review)
+                  setPublicTagIds(tagIds)
+                  setPublicReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)])
+                  // Now shown as a full review above, not a bare rating row.
+                  setBareRatings((prev) => prev.filter((r) => r.userId !== review.user_id))
+                }}
+              />
+            </div>
           )}
-        </div>
 
-        {showReviewComposer && user && (
-          <div className="mt-3">
-            <ReviewEditor
-              bookId={book.id}
-              userId={user.id}
-              visibility="public"
-              existingReview={publicReview}
-              existingTagIds={publicTagIds}
-              allTags={allTags}
-              showTagPicker={false}
-              shareTargets={myCircles}
-              onShare={(circleId, body) => handleShareToCircle(circleId, body)}
-              onSaved={(review, tagIds) => {
-                setPublicReview(review)
-                setPublicTagIds(tagIds)
-                setPublicReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)])
-              }}
-            />
-          </div>
-        )}
-
-        <div className="mt-4 border-t border-line pt-4">
-          {publicReviews.length === 0 ? (
-            <p className="font-sans text-sm text-muted">
-              No public reviews yet. Be the first to share a thought.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {publicReviews.map((review) => (
-                <ReviewCard
-                  key={review.id}
-                  review={review}
-                  currentUserId={user?.id}
-                  currentUserDisplayName={currentUserDisplayName}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-surface p-4 shadow-soft">
-        <h2 className="mb-1 font-display text-lg font-semibold text-ink">From your circle</h2>
-        <p className="mb-3 font-sans text-xs text-muted">Small rooms, not a public feed.</p>
-
-        {myCircles.length === 0 ? (
-          <p className="font-sans text-sm text-muted">
-            You're not in any circles yet.{' '}
-            <Link to="/circles" className="font-bold text-sage underline">
-              Create or join one
-            </Link>
-            .
-          </p>
-        ) : (
-          <>
-            {circleReviews.length === 0 ? (
-              <p className="mb-3 font-sans text-sm text-muted">
-                No circle reviews of this book yet.
+          <div className="mt-4 border-t border-line pt-4">
+            {publicReviews.length === 0 && bareRatings.length === 0 ? (
+              <p className="font-sans text-sm text-muted">
+                No ratings or reviews yet. Be the first to share a thought.
               </p>
             ) : (
-              <ul className="mb-3 flex flex-col gap-2">
-                {circleReviews.map((review) => (
+              <ul className="flex flex-col gap-2">
+                {publicReviews.map((review) => (
                   <ReviewCard
                     key={review.id}
                     review={review}
-                    byline={`${review.profiles.display_name} in ${review.circles.name}`}
                     currentUserId={user?.id}
                     currentUserDisplayName={currentUserDisplayName}
                   />
                 ))}
+                {/* Rated, but no public review to show, so a bare rating
+                    still shows up here instead of only ever counting
+                    silently toward the aggregate average up top. */}
+                {bareRatings.map((rating) => (
+                  <BareRatingRow
+                    key={rating.userId}
+                    displayName={rating.displayName}
+                    stars={rating.stars}
+                  />
+                ))}
               </ul>
             )}
-
-            {user && (
-              <div>
-                <label className="mb-2 flex items-center gap-2 font-sans text-sm text-ink">
-                  Post a review to
-                  <select
-                    value={selectedCircleId}
-                    onChange={(e) => setSelectedCircleId(e.target.value)}
-                    className="rounded-full border border-line bg-page px-3 py-1.5 font-sans text-sm text-ink"
-                  >
-                    {myCircles.map((circle) => (
-                      <option key={circle.id} value={circle.id}>
-                        {circle.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {selectedCircleId && (
-                  <ReviewEditor
-                    key={selectedCircleId}
-                    bookId={book.id}
-                    userId={user.id}
-                    visibility="circle"
-                    circleId={selectedCircleId}
-                    existingReview={circleReview}
-                    existingTagIds={circleTagIds}
-                    allTags={allTags}
-                    showTagPicker={false}
-                    onSaved={(review, tagIds) => {
-                      setCircleReview(review)
-                      setCircleTagIds(tagIds)
-                      void getCircleReviewsForBook(
-                        book.id,
-                        myCircles.map((c) => c.id),
-                      ).then(setCircleReviews)
-                    }}
-                  />
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </section>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
