@@ -8,6 +8,7 @@ import { ReviewCard } from '../components/book/ReviewCard'
 import { ReviewEditor } from '../components/book/ReviewEditor'
 import { useCelebration } from '../components/celebrate/useCelebration'
 import { PageLogSheet } from '../components/dashboard/PageLogSheet'
+import { Skeleton } from '../components/layout/Skeleton'
 import { useAuth } from '../lib/auth/useAuth'
 import { enrichBook, getBookById } from '../lib/books/data'
 import {
@@ -315,7 +316,26 @@ export function BookPage() {
   }
 
   if (state === 'loading') {
-    return <p className="font-sans text-muted">Finding that book…</p>
+    return (
+      <div className="mx-auto max-w-xl">
+        <div className="flex flex-col items-center text-center">
+          <Skeleton className="h-64 w-44 rounded-[20px]" />
+          <Skeleton className="mt-4 h-6 w-56" />
+          <Skeleton className="mt-2 h-4 w-32" />
+          <Skeleton className="mt-3 h-9 w-48 rounded-full" />
+        </div>
+        <div className="mt-6 flex gap-1.5 rounded-full bg-tint p-1.5">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-9 flex-1 rounded-full" />
+          ))}
+        </div>
+        <div className="mt-5 flex flex-col gap-2">
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-2/3" />
+        </div>
+      </div>
+    )
   }
 
   if (state === 'not-found') {
