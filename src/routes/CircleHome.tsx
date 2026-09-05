@@ -227,35 +227,62 @@ export function CircleHome() {
           ) : (
             reads.map((read) => (
               <div key={read.id} className="rounded-3xl bg-surface p-4 shadow-soft">
-                <Link
-                  to={`/book/${read.book_id}`}
-                  className="font-display text-lg font-semibold text-ink"
-                >
-                  {read.books.title}
-                </Link>
+                <div className="mb-3 flex items-center gap-3">
+                  {/* A small gradient "cover" swatch, matching the
+                      mockup's reading-together card even when the real
+                      book has no cover image of its own yet. */}
+                  <div
+                    className="h-12 w-9 flex-none rounded-lg"
+                    style={{
+                      background: read.books.cover_url
+                        ? `url(${read.books.cover_url}) center/cover`
+                        : 'linear-gradient(160deg, var(--nibbles-sage), var(--nibbles-sage-deep))',
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <span className="block font-sans text-[11px] font-bold tracking-wide text-sage uppercase">
+                      Reading together
+                    </span>
+                    <Link
+                      to={`/book/${read.book_id}`}
+                      className="block truncate font-display text-lg font-semibold text-ink"
+                    >
+                      {read.books.title}
+                    </Link>
+                  </div>
+                </div>
                 {read.target_finish_date && (
                   <p className="mt-0.5 mb-3 font-sans text-xs text-muted">
                     Target finish {read.target_finish_date}
                   </p>
                 )}
-                <ul className="flex flex-col gap-2.5">
-                  {(progressByBook[read.book_id] ?? []).map((progress) => (
-                    <li key={progress.id} className="flex items-center gap-2.5">
-                      <span className="w-16 flex-none truncate font-sans text-xs font-bold text-muted">
-                        {progress.profiles.display_name}
-                      </span>
-                      <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-tint">
-                        <div
-                          className="h-full rounded-full bg-sage"
-                          style={{ width: `${Math.min(progress.percent_complete ?? 0, 100)}%` }}
-                        />
-                      </div>
-                      <span className="w-9 flex-none text-right font-sans text-xs font-bold text-muted">
-                        {Math.round(progress.percent_complete ?? 0)}%
-                      </span>
-                    </li>
-                  ))}
+                <ul className="mb-3 flex flex-col gap-2.5">
+                  {(progressByBook[read.book_id] ?? []).map((progress) => {
+                    const isYou = progress.profiles.id === user?.id
+                    return (
+                      <li key={progress.id} className="flex items-center gap-2.5">
+                        <span className="w-16 flex-none truncate font-sans text-xs font-bold text-muted">
+                          {isYou ? 'You' : progress.profiles.display_name}
+                        </span>
+                        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-tint">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.min(progress.percent_complete ?? 0, 100)}%`,
+                              background: isYou ? 'var(--nibbles-ink)' : 'var(--nibbles-sage)',
+                            }}
+                          />
+                        </div>
+                        <span className="w-9 flex-none text-right font-sans text-xs font-bold text-muted">
+                          {Math.round(progress.percent_complete ?? 0)}%
+                        </span>
+                      </li>
+                    )
+                  })}
                 </ul>
+                <p className="font-sans text-[11px] text-muted">
+                  Nobody sees your exact page unless you share it.
+                </p>
               </div>
             ))
           )}
@@ -264,7 +291,7 @@ export function CircleHome() {
       </section>
 
       <section>
-        <SectionHeading icon={<DiscussionIcon />}>Discussion</SectionHeading>
+        <SectionHeading icon={<DiscussionIcon />}>Chatter</SectionHeading>
         <form
           onSubmit={(e) => void handlePostMessage(e)}
           className="mb-4 flex items-center gap-2 rounded-full bg-surface py-1.5 pr-1.5 pl-4 shadow-soft"
@@ -273,7 +300,7 @@ export function CircleHome() {
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Say something warm"
+            placeholder="Say something kind"
             aria-label="Message"
             className="h-10 min-w-0 flex-1 border-none bg-transparent font-sans text-sm text-ink outline-none placeholder:text-muted"
           />
@@ -312,7 +339,7 @@ export function CircleHome() {
                   <div
                     className={`max-w-[78%] px-3.5 py-2.5 font-sans text-sm shadow-soft ${
                       isOwn
-                        ? 'rounded-[20px_20px_6px_20px] bg-sage text-surface'
+                        ? 'rounded-[20px_20px_6px_20px] bg-ink text-surface'
                         : 'rounded-[20px_20px_20px_6px] bg-surface text-ink'
                     }`}
                   >
