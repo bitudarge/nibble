@@ -2,6 +2,21 @@ import type { Book } from '../../types/database'
 import { getOrCreateBook } from '../books/data'
 import { searchOpenLibraryBySubject } from '../books/openLibrary'
 import { genreTagToSubjectSlug } from './tagVocabulary'
+import type { TasteQuizAnswers } from './types'
+
+/**
+ * Which way to sort Open Library's subject results — see
+ * searchOpenLibraryBySubject's own comment for why 'new' is the default
+ * rather than the endpoint's own classic-skewed ordering. Only an
+ * explicit 'classics' answer switches to 'old'; everything else
+ * (including never having taken the quiz) leans newer, since that's a
+ * better default for virtually everyone.
+ */
+function sortForRecencyPreference(
+  preference: TasteQuizAnswers['recencyPreference'] | undefined,
+): 'new' | 'old' {
+  return preference === 'classics' ? 'old' : 'new'
+}
 
 // How many of the user's top genre affinities to search externally, and
 // how many Open Library results to pull per genre. Kept bounded: this
@@ -40,14 +55,20 @@ const MAX_DISCOVERED_BOOKS = 16
 export async function discoverBooksForGenres(
   genres: string[],
   excludeBookIds: Set<string>,
+  recencyPreference?: TasteQuizAnswers['recencyPreference'],
 ): Promise<Book[]> {
   const topGenres = genres.slice(0, GENRES_TO_SEARCH)
   if (topGenres.length === 0) return []
 
+  const sort = sortForRecencyPreference(recencyPreference)
   const resultsByGenre = await Promise.all(
     topGenres.map(async (genre) => {
       try {
-        return await searchOpenLibraryBySubject(genreTagToSubjectSlug(genre), RESULTS_PER_GENRE)
+        return await searchOpenLibraryBySubject(
+          genreTagToSubjectSlug(genre),
+          RESULTS_PER_GENRE,
+          sort,
+        )
       } catch {
         return []
       }

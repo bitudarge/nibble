@@ -81,14 +81,25 @@ const SUBJECT_URL = 'https://openlibrary.org/subjects'
  * see `genreTagToSubjectSlug` in the recommender's tagVocabulary.ts for how
  * a genre tag becomes one. An unrecognized slug isn't an error, Open
  * Library just returns an empty `works` list for it.
+ *
+ * `sort` matters a lot here: the endpoint's own default ordering (omit
+ * the param, or equivalently 'editions') is by edition count, which
+ * skews heavily toward old public-domain classics — confirmed directly,
+ * the unsorted "fantasy" subject's top results are Alice in Wonderland
+ * (1865), The Wonderful Wizard of Oz (1899), Gulliver's Travels (1726).
+ * 'new' sorts by first-publish-date descending instead, which is what
+ * discovery.ts uses by default now rather than only when a user
+ * explicitly asks for newer books.
  */
 export async function searchOpenLibraryBySubject(
   subjectSlug: string,
   limit = 10,
+  sort?: 'new' | 'old',
 ): Promise<OpenLibrarySearchResult[]> {
   const url = new URL(`${SUBJECT_URL}/${subjectSlug}.json`)
   url.searchParams.set('limit', String(limit))
   url.searchParams.set('details', 'false')
+  if (sort) url.searchParams.set('sort', sort)
 
   const response = await fetch(url)
   if (!response.ok) {
