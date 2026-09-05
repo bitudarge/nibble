@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Book } from '../../types/database'
 import { getOrCreateBook } from '../books/data'
 import { searchOpenLibraryBySubject } from '../books/openLibrary'
-import { discoverBooksForGenres } from './discovery'
+import { discoverBooksForGenres, discoverPopularBooks } from './discovery'
 
 vi.mock('../books/data', () => ({
   getOrCreateBook: vi.fn(),
@@ -118,5 +118,29 @@ describe('discoverBooksForGenres', () => {
 
     expect(mockedGetOrCreate).toHaveBeenCalledTimes(1)
     expect(discovered).toHaveLength(1)
+  })
+})
+
+describe('discoverPopularBooks', () => {
+  it('searches the bestseller subject, newest first', async () => {
+    mockedSearch.mockResolvedValue([])
+    await discoverPopularBooks(new Set())
+    expect(mockedSearch).toHaveBeenCalledWith('new_york_times_bestseller', 8, 'new')
+  })
+
+  it('creates a book for each result and excludes ones already in the pool', async () => {
+    mockedSearch.mockResolvedValue([searchResult('ol1'), searchResult('ol2')])
+    mockedGetOrCreate.mockImplementation(async (result) =>
+      book('b-' + result.openLibraryId, result.openLibraryId),
+    )
+
+    const discovered = await discoverPopularBooks(new Set(['b-ol1']))
+
+    expect(discovered.map((b) => b.id)).toEqual(['b-ol2'])
+  })
+
+  it('returns nothing rather than throwing when the search fails', async () => {
+    mockedSearch.mockRejectedValue(new Error('network error'))
+    expect(await discoverPopularBooks(new Set())).toEqual([])
   })
 })

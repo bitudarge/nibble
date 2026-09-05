@@ -1,6 +1,6 @@
 import type { Book } from '../../types/database'
 import { getOrCreateBook } from '../books/data'
-import { searchOpenLibraryBySubject } from '../books/openLibrary'
+import { searchOpenLibraryBySubject, type OpenLibrarySearchResult } from '../books/openLibrary'
 import { genreTagToSubjectSlug } from './tagVocabulary'
 import type { TasteQuizAnswers } from './types'
 
@@ -31,6 +31,45 @@ function sortForRecencyPreference(
 const GENRES_TO_SEARCH = 3
 const RESULTS_PER_GENRE = 8
 const MAX_DISCOVERED_BOOKS = 16
+
+/** Given a batch of raw search results, creates/fetches each as a real
+ * `books` row (same `getOrCreateBook` path Search.tsx uses) and dedupes
+ * against both each other and the caller's own exclusion set. Shared by
+ * every discovery function below so "turn search results into usable
+ * candidates" is written, and best-effort-guarded, in exactly one place.
+ */
+async function materializeDiscoveredBooks(
+  results: OpenLibrarySearchResult[],
+  excludeBookIds: Set<string>,
+  maxCount: number,
+): Promise<Book[]> {
+  const seenOpenLibraryIds = new Set<string>()
+  const deduped = results.filter((result) => {
+    if (seenOpenLibraryIds.has(result.openLibraryId)) return false
+    seenOpenLibraryIds.add(result.openLibraryId)
+    return true
+  })
+
+  const created = await Promise.all(
+    deduped.map(async (result) => {
+      try {
+        return await getOrCreateBook(result)
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  const discovered: Book[] = []
+  const usedIds = new Set(excludeBookIds)
+  for (const book of created) {
+    if (!book || usedIds.has(book.id)) continue
+    usedIds.add(book.id)
+    discovered.push(book)
+    if (discovered.length >= maxCount) break
+  }
+  return discovered
+}
 
 /**
  * Pulls in books nobody's added to Nibble yet, from Open Library's
@@ -75,30 +114,32 @@ export async function discoverBooksForGenres(
     }),
   )
 
-  const seenOpenLibraryIds = new Set<string>()
-  const candidates = resultsByGenre.flat().filter((result) => {
-    if (seenOpenLibraryIds.has(result.openLibraryId)) return false
-    seenOpenLibraryIds.add(result.openLibraryId)
-    return true
-  })
+  return materializeDiscoveredBooks(resultsByGenre.flat(), excludeBookIds, MAX_DISCOVERED_BOOKS)
+}
 
-  const created = await Promise.all(
-    candidates.map(async (result) => {
-      try {
-        return await getOrCreateBook(result)
-      } catch {
-        return null
-      }
-    }),
-  )
+// Open Library's tag for books that have appeared on the New York Times
+// bestseller list — a real, recognizable "popular right now" signal, not
+// a vague popularity score. Confirmed directly that this subject slug
+// returns genuine, well-known current bestsellers (Atomic Habits, Dark
+// Matter, and so on), not junk.
+const BESTSELLER_SUBJECT = 'new_york_times_bestseller'
+const POPULAR_RESULTS = 8
 
-  const discovered: Book[] = []
-  const usedIds = new Set(excludeBookIds)
-  for (const book of created) {
-    if (!book || usedIds.has(book.id)) continue
-    usedIds.add(book.id)
-    discovered.push(book)
-    if (discovered.length >= MAX_DISCOVERED_BOOKS) break
+/**
+ * Pulls in currently-popular books regardless of the user's own genre
+ * affinities, so the candidate pool isn't only ever narrow personal-taste
+ * matches — the owner asked to "include popular books best seller book in
+ * the mix of recommendation and discover to create more diversity."
+ * Same best-effort/bounded contract as discoverBooksForGenres: a failed
+ * search or a book that fails to save is skipped, never worth breaking
+ * the page over a flaky external API.
+ */
+export async function discoverPopularBooks(excludeBookIds: Set<string>): Promise<Book[]> {
+  let results: OpenLibrarySearchResult[]
+  try {
+    results = await searchOpenLibraryBySubject(BESTSELLER_SUBJECT, POPULAR_RESULTS, 'new')
+  } catch {
+    return []
   }
-  return discovered
+  return materializeDiscoveredBooks(results, excludeBookIds, POPULAR_RESULTS)
 }
