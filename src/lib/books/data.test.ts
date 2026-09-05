@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildEnrichmentUpdate } from './data'
+import { buildEnrichmentUpdate, mergeEnrichmentSources } from './data'
 import type { Book } from '../../types/database'
 
 function makeBook(overrides: Partial<Book> = {}): Book {
@@ -74,5 +74,62 @@ describe('buildEnrichmentUpdate', () => {
       description: 'A synopsis.',
       categories: ['Fantasy'],
     })
+  })
+})
+
+describe('mergeEnrichmentSources', () => {
+  it('returns Google Books data unchanged when there is no fallback', () => {
+    const google = {
+      description: 'A synopsis.',
+      categories: ['Fantasy'],
+      pageCount: 245,
+      publishedYear: 2020,
+      coverUrl: null,
+    }
+    expect(mergeEnrichmentSources(google, null)).toBe(google)
+  })
+
+  it('fills in description and subjects from Open Library when Google had nothing', () => {
+    const merged = mergeEnrichmentSources(null, {
+      description: 'From Open Library.',
+      subjects: ['Fantasy fiction', 'Magic'],
+    })
+    expect(merged).toEqual({
+      description: 'From Open Library.',
+      categories: ['Fantasy fiction', 'Magic'],
+      pageCount: null,
+      publishedYear: null,
+      coverUrl: null,
+    })
+  })
+
+  it('never overwrites a Google description or categories that already exist', () => {
+    const merged = mergeEnrichmentSources(
+      {
+        description: 'Google synopsis.',
+        categories: ['Sci-Fi'],
+        pageCount: 300,
+        publishedYear: 1999,
+        coverUrl: null,
+      },
+      { description: 'Open Library synopsis.', subjects: ['Fantasy fiction'] },
+    )
+    expect(merged?.description).toBe('Google synopsis.')
+    expect(merged?.categories).toEqual(['Sci-Fi'])
+  })
+
+  it('fills only the missing half when Google has one but not the other', () => {
+    const merged = mergeEnrichmentSources(
+      {
+        description: null,
+        categories: ['Sci-Fi'],
+        pageCount: null,
+        publishedYear: null,
+        coverUrl: null,
+      },
+      { description: 'Open Library synopsis.', subjects: ['Fantasy fiction'] },
+    )
+    expect(merged?.description).toBe('Open Library synopsis.')
+    expect(merged?.categories).toEqual(['Sci-Fi'])
   })
 })
