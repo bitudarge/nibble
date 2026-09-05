@@ -199,9 +199,12 @@ export type RecentCircleActivity =
 /**
  * Light cross-circle notifications feed for the Dashboard: recent
  * finishes and book-referencing messages across all the user's circles,
- * newest first. Deliberately excludes plain chat with no book attached —
- * that's real conversation, not a notification, and belongs in the
- * circle's own Discussion feed, not summarized on Home.
+ * newest first, from OTHER people only. Deliberately excludes plain chat
+ * with no book attached (that's real conversation, belongs in the
+ * circle's own Discussion feed) and excludes the viewer's own activity —
+ * "the person doesn't need to see what they said at their own home
+ * page," it's not news to them. Capped at 3, not 5: a short, skimmable
+ * list of what circle-mates have been up to, not a feed to scroll.
  */
 export async function getRecentCircleActivity(userId: string): Promise<RecentCircleActivity[]> {
   const circles = await getMyCircles(userId)
@@ -214,18 +217,21 @@ export async function getRecentCircleActivity(userId: string): Promise<RecentCir
         getCircleMessages(circle.id),
       ])
 
-      const finishes: RecentCircleActivity[] = showcase.slice(0, 5).map((item) => ({
-        kind: 'finished',
-        id: item.id,
-        createdAt: item.finished_at ?? item.updated_at,
-        circleName: circle.name,
-        displayName: item.profiles.display_name,
-        bookId: item.book_id,
-        bookTitle: item.books.title,
-      }))
+      const finishes: RecentCircleActivity[] = showcase
+        .filter((item) => item.user_id !== userId)
+        .slice(0, 5)
+        .map((item) => ({
+          kind: 'finished',
+          id: item.id,
+          createdAt: item.finished_at ?? item.updated_at,
+          circleName: circle.name,
+          displayName: item.profiles.display_name,
+          bookId: item.book_id,
+          bookTitle: item.books.title,
+        }))
 
       const bookMoments: RecentCircleActivity[] = messages
-        .filter((m) => m.book_id && m.books)
+        .filter((m) => m.book_id && m.books && m.user_id !== userId)
         .slice(0, 5)
         .map((m) => ({
           kind: 'message',
@@ -245,7 +251,7 @@ export async function getRecentCircleActivity(userId: string): Promise<RecentCir
   return perCircle
     .flat()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 5)
+    .slice(0, 3)
 }
 
 export interface ShowcaseItem extends ShelfItem {
