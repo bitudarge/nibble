@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Logo } from '../brand/Logo'
 import { useAuth } from '../../lib/auth/useAuth'
+import { getStreak } from '../../lib/goals/data'
 import { resolveDisplayIdentity } from '../../lib/profile/identity'
+import type { ReadingStreak } from '../../types/database'
 import {
   CirclesIcon,
   DiscoverIcon,
@@ -10,30 +12,34 @@ import {
   HomeIcon,
   RecsIcon,
   ShelvesIcon,
-  YouIcon,
+  StreakIcon,
 } from './navIcons'
 
 /**
- * The six places in the app, in the order they appear in both the phone
- * bottom tab bar and the desktop hamburger menu. `end: true` on Home stops
- * it matching every other route (NavLink otherwise treats "/" as a prefix
- * of everything).
+ * The five places in the app, in the order they appear in both the phone
+ * bottom tab bar and the desktop hamburger menu, matching the round 4
+ * mockup's own tab order exactly (Home, Shelves, Discover, Picks,
+ * Circles). Profile ("You") isn't one of these — like the mockup, it's
+ * reached via the header's "You" pill instead, not a sixth tab. `end:
+ * true` on Home stops it matching every other route (NavLink otherwise
+ * treats "/" as a prefix of everything).
  */
 const NAV_ITEMS = [
   { key: 'home', label: 'Home', to: '/', icon: HomeIcon, end: true },
-  { key: 'discover', label: 'Discover', to: '/search', icon: DiscoverIcon, end: false },
   { key: 'shelves', label: 'Shelves', to: '/shelves', icon: ShelvesIcon, end: false },
+  { key: 'discover', label: 'Discover', to: '/search', icon: DiscoverIcon, end: false },
+  { key: 'recs', label: 'Picks', to: '/recommendations', icon: RecsIcon, end: false },
   { key: 'circles', label: 'Circles', to: '/circles', icon: CirclesIcon, end: false },
-  { key: 'recs', label: 'Recs', to: '/recommendations', icon: RecsIcon, end: false },
-  { key: 'you', label: 'You', to: '/wrap', icon: YouIcon, end: false },
 ] as const
 
 /**
  * Persistent nav + user menu wrapping every signed-in page (via RequireAuth
- * -> AppShell -> <Outlet />, see App.tsx). Phone: a bottom tab bar. Desktop
- * (md and up): a hamburger menu in the header rather than a permanent
- * sidebar, opens a dropdown panel with the same six destinations plus the
- * user's own name/sign-out.
+ * -> AppShell -> <Outlet />, see App.tsx). A persistent header (logo/back,
+ * streak pill, "You" pill) on every screen, matching the round 4 mockup's
+ * own chrome exactly. Phone: a bottom tab bar. Desktop (md and up): a
+ * hamburger menu in the header rather than a permanent sidebar, opens a
+ * dropdown panel with the same five destinations plus the user's own
+ * name/sign-out.
  */
 export function AppShell() {
   const { user, profile, signOut } = useAuth()
@@ -42,8 +48,25 @@ export function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const toggleRef = useRef<HTMLButtonElement>(null)
+  const [streak, setStreak] = useState<ReadingStreak | null>(null)
 
   const { displayName, avatarUrl } = resolveDisplayIdentity(user, profile)
+
+  // The header streak pill is read-only/informational everywhere (tapping
+  // it in the mockup just pops a toast repeating the same number back),
+  // so a light one-time fetch on mount is enough — it doesn't need to
+  // stay in sync with every page's own streak-changing actions second to
+  // second, just be roughly right whenever a page is opened or changed.
+  useEffect(() => {
+    let cancelled = false
+    if (!user) return
+    getStreak(user.id).then((s) => {
+      if (!cancelled) setStreak(s)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   // Close the menu on Escape and on an outside click, and return focus to
   // the hamburger button when it closes from Escape so keyboard users
@@ -94,28 +117,32 @@ export function AppShell() {
           >
             <HamburgerIcon />
           </button>
-          <Logo variant="full" className="h-8 md:hidden" />
-          <Logo variant="full" className="hidden h-8 md:block" />
+          <Logo variant="full" className="h-8" />
         </div>
 
-        {/* Straight to the profile page (Wrap) — the whole point of showing
-            your own avatar here is to get back to your own profile. */}
-        <Link
-          to="/wrap"
-          aria-label="Go to your profile"
-          className="hidden items-center gap-2 rounded-full transition-transform active:scale-95 md:flex"
-        >
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full" />
-          ) : (
-            <div
-              aria-hidden
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-leaf text-sm font-bold text-on-leaf"
-            >
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-          )}
-        </Link>
+        {/* Streak pill + "You" pill, always visible on every screen —
+            matches the round 4 mockup's own persistent header exactly.
+            Both are informational/navigational only, tapping "You" is
+            the one real action (straight to your own profile page). */}
+        <div className="flex flex-none items-center gap-2">
+          <div
+            aria-label="Reading streak"
+            className="flex h-10 items-center gap-1.5 rounded-full bg-tint px-3.5"
+          >
+            <StreakIcon className="text-sage" />
+            <span className="font-sans text-sm font-extrabold text-on-leaf">
+              {streak?.current_streak ?? 0}
+            </span>
+          </div>
+          <Link
+            to="/wrap"
+            aria-label="Go to your profile"
+            className="flex h-11 items-center gap-2 rounded-full bg-leaf px-4 font-sans text-sm font-extrabold text-on-leaf transition-transform active:scale-95"
+          >
+            {avatarUrl && <img src={avatarUrl} alt="" className="h-6 w-6 rounded-full" />}
+            You
+          </Link>
+        </div>
 
         {menuOpen && (
           <div
