@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildEnrichmentUpdate, mergeEnrichmentSources } from './data'
+import { buildEnrichmentUpdate, hasUsefulEnrichment, mergeEnrichmentSources } from './data'
 import type { Book } from '../../types/database'
 
 function makeBook(overrides: Partial<Book> = {}): Book {
@@ -131,5 +131,29 @@ describe('mergeEnrichmentSources', () => {
     )
     expect(merged?.description).toBe('Open Library synopsis.')
     expect(merged?.categories).toEqual(['Sci-Fi'])
+  })
+})
+
+describe('hasUsefulEnrichment', () => {
+  it('is false when both description and categories are empty', () => {
+    expect(hasUsefulEnrichment(makeBook({ metadata: { description: null, categories: [] } }))).toBe(
+      false,
+    )
+  })
+
+  it('is true when there is a description, even with no categories', () => {
+    expect(
+      hasUsefulEnrichment(makeBook({ metadata: { description: 'A synopsis.', categories: [] } })),
+    ).toBe(true)
+  })
+
+  it('is true when there are categories, even with no description', () => {
+    expect(
+      hasUsefulEnrichment(makeBook({ metadata: { description: null, categories: ['Fantasy'] } })),
+    ).toBe(true)
+  })
+
+  it('is false for a book with no metadata at all yet', () => {
+    expect(hasUsefulEnrichment(makeBook({ metadata: {} }))).toBe(false)
   })
 })
