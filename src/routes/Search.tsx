@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { GenreShelves } from '../components/discover/GenreShelves'
+import { useAuth } from '../lib/auth/useAuth'
 import { getOrCreateBook } from '../lib/books/data'
 import { searchOpenLibrary, type OpenLibrarySearchResult } from '../lib/books/openLibrary'
+import { getOrComputeTasteProfile } from '../lib/recommender'
 
 type LoadState = 'idle' | 'loading' | 'error' | 'loaded'
 
@@ -38,6 +41,7 @@ function SearchGlyph({ className = '' }: { className?: string }) {
 }
 
 export function Search() {
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const initialQuery = searchParams.get('q') ?? ''
@@ -47,6 +51,14 @@ export function Search() {
   const [state, setState] = useState<LoadState>(initialQuery.trim() ? 'loading' : 'idle')
   const [error, setError] = useState<string | null>(null)
   const [openingId, setOpeningId] = useState<string | null>(null)
+  // The bare genre tags ("fantasy", "sci-fi") from the user's taste quiz
+  // answers, in the order they picked them — drives the personalized genre
+  // shelves below the mood chips. Stays an empty array (no shelves render,
+  // see GenreShelves) for anyone who hasn't taken the quiz yet, or if the
+  // profile fails to load for any reason: this is a bonus section on top
+  // of a working search page, not something worth showing a scary error
+  // for.
+  const [quizGenres, setQuizGenres] = useState<string[]>([])
 
   // A timer for the debounce, and the controller for whichever request is
   // currently in flight, so a fast-typing user's earlier keystrokes never
@@ -109,6 +121,29 @@ export function Search() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Loads the signed-in user's taste quiz genres once, to drive the
+  // personalized shelves below. Independent of the search box's own
+  // loading/error state above, a failed or slow profile fetch here should
+  // never block search from working.
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadQuizGenres() {
+      if (!user) return
+      try {
+        const profile = await getOrComputeTasteProfile(user.id)
+        if (!cancelled) setQuizGenres(profile.quiz?.answers.genres ?? [])
+      } catch {
+        if (!cancelled) setQuizGenres([])
+      }
+    }
+
+    void loadQuizGenres()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   function handleQueryChange(e: ChangeEvent<HTMLInputElement>) {
     const value = e.target.value
@@ -173,6 +208,12 @@ export function Search() {
           </button>
         ))}
       </div>
+
+      <GenreShelves
+        genres={quizGenres}
+        openingId={openingId}
+        onSelect={(result) => void handleSelect(result)}
+      />
 
       {!showResultsArea && (
         <p className="font-sans text-sm text-muted">
