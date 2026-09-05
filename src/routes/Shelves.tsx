@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
-import { ProgressControl } from '../components/book/ProgressControl'
 import { Logo } from '../components/brand/Logo'
 import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
+import { PageLogSheet } from '../components/dashboard/PageLogSheet'
 import { useAuth } from '../lib/auth/useAuth'
 import { getStreak, isStreakMilestone } from '../lib/goals/data'
 import { logReadingProgress } from '../lib/sessions/data'
@@ -41,6 +41,7 @@ export function Shelves() {
   // Kept just for before/after streak-milestone comparison when logging
   // progress inline, same shape as Home.tsx's quickLogProgress.
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
+  const [logSheetItem, setLogSheetItem] = useState<ShelfItemWithBook | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -87,9 +88,9 @@ export function Shelves() {
     }
   }
 
-  // Same interaction Home.tsx's "Currently reading" strip already uses for
-  // this exact need (a quick page-number prompt rather than a persistent
-  // inline field, which would crowd this grid's already-compact cards).
+  // Same PageLogSheet Home and the Book detail page already use for this
+  // exact need, reused here instead of a third copy of the same
+  // slider/save logic.
   async function quickLogProgress(item: ShelfItemWithBook, toPage: number) {
     if (!user) return
     const streakBefore = streak?.current_streak ?? 0
@@ -122,7 +123,7 @@ export function Shelves() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not log your progress.')
-      throw err // ProgressControl needs this to know the save failed and roll back its own display.
+      throw err // PageLogSheet needs this to know the save failed and keep the sheet open.
     }
   }
 
@@ -223,44 +224,65 @@ export function Shelves() {
                     <p className="mt-0.5 truncate font-sans text-xs text-muted">
                       {item.books.author}
                     </p>
-                    {item.status === 'reading' && pageCount && (
-                      <>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-tint">
-                          <div
-                            className="h-full rounded-full bg-sage"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <p className="mt-1 font-sans text-xs text-muted">
-                          page {currentPage} of {pageCount}
-                        </p>
-                      </>
-                    )}
+                    {item.status === 'reading' &&
+                      (pageCount ? (
+                        <>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-tint">
+                            <div
+                              className="h-full rounded-full transition-[width] duration-500 ease-out"
+                              style={{
+                                width: `${pct}%`,
+                                background:
+                                  'linear-gradient(90deg, var(--nibbles-sage-deep), var(--nibbles-sage))',
+                              }}
+                            />
+                          </div>
+                          <p className="mt-1 font-sans text-xs text-muted">
+                            page {currentPage} of {pageCount}
+                          </p>
+                        </>
+                      ) : (
+                        // No known page count for this book — still say
+                        // where they are rather than showing nothing at
+                        // all, even without a bar to put a percent on.
+                        <p className="mt-1 font-sans text-xs text-muted">page {currentPage}</p>
+                      ))}
                     {item.status !== 'reading' && pageCount && (
                       <p className="mt-1 font-sans text-xs text-muted">{pageCount} pages</p>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => void moveTo(item, NEXT_STATUS[item.status])}
-                      className="btn-cta mt-2 self-start rounded-full bg-sage px-4 py-1.5 font-sans text-xs font-extrabold text-surface"
-                    >
-                      {MOVE_LABEL[item.status]}
-                    </button>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void moveTo(item, NEXT_STATUS[item.status])}
+                        className="btn-cta self-start rounded-full bg-sage px-4 py-1.5 font-sans text-xs font-extrabold text-surface"
+                      >
+                        {MOVE_LABEL[item.status]}
+                      </button>
+                      {item.status === 'reading' && (
+                        <button
+                          type="button"
+                          onClick={() => setLogSheetItem(item)}
+                          className="self-start rounded-full border-2 border-line px-4 py-1.5 font-sans text-xs font-extrabold text-ink transition-transform active:scale-95"
+                        >
+                          Nibble
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-                {item.status === 'reading' && (
-                  <div className="mt-3 border-t border-line pt-3">
-                    <ProgressControl
-                      currentPage={currentPage}
-                      pageCount={pageCount}
-                      onSave={(page) => quickLogProgress(item, page)}
-                    />
-                  </div>
-                )}
               </li>
             )
           })}
         </ul>
+      )}
+
+      {logSheetItem && (
+        <PageLogSheet
+          items={[logSheetItem]}
+          initialItemId={logSheetItem.id}
+          onClose={() => setLogSheetItem(null)}
+          onSave={(item, toPage) => quickLogProgress(item, toPage)}
+        />
       )}
     </div>
   )
