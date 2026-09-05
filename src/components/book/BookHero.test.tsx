@@ -51,4 +51,17 @@ describe('BookHero', () => {
     expect(screen.queryByText('No cover yet')).not.toBeInTheDocument()
     expect(getCoverImage(container)).toHaveAttribute('src', 'https://example.com/cover.jpg')
   })
+
+  it('shows the About card and its facts row even with no synopsis or categories', () => {
+    render(<BookHero {...baseProps} pageCount={245} publishedYear={2020} />)
+    expect(screen.getByText('About this book')).toBeInTheDocument()
+    expect(screen.getByText('No synopsis found for this one yet.')).toBeInTheDocument()
+    expect(screen.getByText('245')).toBeInTheDocument()
+    expect(screen.getByText('2020')).toBeInTheDocument()
+  })
+
+  it('pulls the average rating number out of the aggregate label for the facts row', () => {
+    render(<BookHero {...baseProps} pageCount={245} aggregateLabel="★ 4.4 average (12 ratings)" />)
+    expect(screen.getByText('4.4')).toBeInTheDocument()
+  })
 })
