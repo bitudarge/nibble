@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getIsoWeekPeriodKey, getMonthPeriodKey, isStreakMilestone } from './data'
+import {
+  daysReadFromSessionDates,
+  getIsoWeekPeriodKey,
+  getMonthPeriodKey,
+  isStreakMilestone,
+} from './data'
 
 describe('getMonthPeriodKey', () => {
   it('pads single-digit months', () => {
@@ -55,5 +60,39 @@ describe('isStreakMilestone', () => {
     expect(isStreakMilestone(3, 4)).toBe(false)
     expect(isStreakMilestone(5, 5)).toBe(false)
     expect(isStreakMilestone(7, 6)).toBe(false)
+  })
+})
+
+describe('daysReadFromSessionDates', () => {
+  const MONDAY = '2026-09-07'
+
+  it('marks Monday and Wednesday true from two session dates', () => {
+    expect(daysReadFromSessionDates(['2026-09-07', '2026-09-09'], MONDAY)).toEqual([
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ])
+  })
+
+  it('ignores duplicate dates and dates outside the week', () => {
+    expect(
+      daysReadFromSessionDates(['2026-09-07', '2026-09-07', '2026-09-14', '2026-08-31'], MONDAY),
+    ).toEqual([true, false, false, false, false, false, false])
+  })
+
+  it('returns all-false for an empty week', () => {
+    expect(daysReadFromSessionDates([], MONDAY)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
   })
 })

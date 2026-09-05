@@ -3,6 +3,7 @@ import { getShelfItems } from '../shelf/data'
 import type { Book } from '../../types/database'
 import { getBookTagProfiles } from './bookTagProfile'
 import { getCircleSignals } from './circleSignals'
+import { getDismissedBookIds } from './dismissals'
 import { discoverBooksForGenres } from './discovery'
 import { explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
@@ -85,14 +86,20 @@ export function topGenreAffinities(tagAffinity: Record<string, number>, limit = 
  * recently-added books with an honest label rather than a fake "why".
  */
 export async function getRecommendations(userId: string, limit = 10): Promise<Recommendation[]> {
-  const shelfItems = await getShelfItems(userId)
-  const shelvedBookIds = shelfItems.map((item) => item.book_id)
+  const [shelfItems, dismissedBookIds] = await Promise.all([
+    getShelfItems(userId),
+    getDismissedBookIds(userId),
+  ])
+  // "Not for me" excludes a book from every future call the same way a
+  // shelved one already is — one combined exclusion list rather than two
+  // separate ones threaded through the rest of this function.
+  const excludedBookIds = [...shelfItems.map((item) => item.book_id), ...dismissedBookIds]
 
   const tasteProfile = await getOrComputeTasteProfile(userId)
 
   if (needsFallback(tasteProfile)) {
     const remaining = MIN_RATINGS_FOR_PERSONALIZATION - tasteProfile.ratedBookCount
-    const fallback = await getRecentlyAddedBooks(shelvedBookIds, limit)
+    const fallback = await getRecentlyAddedBooks(excludedBookIds, limit)
     return fallback.map((book) => ({
       book,
       score: 0,
@@ -106,7 +113,7 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     }))
   }
 
-  const candidates = await getRecentlyAddedBooks(shelvedBookIds, CANDIDATE_POOL_SIZE)
+  const candidates = await getRecentlyAddedBooks(excludedBookIds, CANDIDATE_POOL_SIZE)
 
   // Widen the pool past whatever's already in the catalog: search Open
   // Library for the genres this taste profile likes best (quiz-seeded or
@@ -117,7 +124,7 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
   const topGenres = topGenreAffinities(tasteProfile.tagAffinity)
   if (topGenres.length > 0) {
     try {
-      const excludeIds = new Set([...shelvedBookIds, ...candidates.map((book) => book.id)])
+      const excludeIds = new Set([...excludedBookIds, ...candidates.map((book) => book.id)])
       const discovered = await discoverBooksForGenres(topGenres, excludeIds)
       candidates.push(...discovered)
     } catch {

@@ -66,7 +66,7 @@ export function getIsoWeekPeriodKey(date: Date): string {
 }
 
 /** The `[start, end)` calendar range one period_key covers, for date-range queries against `finished_at`. */
-function periodRange(period: GoalPeriod, periodKey: string): { start: string; end: string } {
+export function periodRange(period: GoalPeriod, periodKey: string): { start: string; end: string } {
   if (period === 'month') {
     const [yearStr, monthStr] = periodKey.split('-')
     const year = Number(yearStr)
@@ -144,6 +144,40 @@ export async function countBooksFinishedInPeriod(
     .lt('finished_at', end)
   if (error) throw error
   return count ?? 0
+}
+
+/**
+ * Which of this ISO week's 7 days (Monday first) already have a real
+ * reading_sessions row, for the Home "days this week" pip row. Pure
+ * date-bucketing logic split out as `daysReadFromSessionDates` so it's
+ * testable without a database, same reasoning as periodRange above.
+ */
+export function daysReadFromSessionDates(sessionDates: string[], weekStart: string): boolean[] {
+  const days = Array(7).fill(false) as boolean[]
+  const start = new Date(`${weekStart}T00:00:00Z`).getTime()
+  for (const dateStr of sessionDates) {
+    const diff = Math.round(
+      (new Date(`${dateStr}T00:00:00Z`).getTime() - start) / (24 * 3600 * 1000),
+    )
+    if (diff >= 0 && diff < 7) days[diff] = true
+  }
+  return days
+}
+
+export async function getReadDaysThisWeek(userId: string, weekKey: string): Promise<boolean[]> {
+  const db = requireSupabase()
+  const { start, end } = periodRange('week', weekKey)
+  const { data, error } = await db
+    .from('reading_sessions')
+    .select('session_date')
+    .eq('user_id', userId)
+    .gte('session_date', start)
+    .lt('session_date', end)
+  if (error) throw error
+  return daysReadFromSessionDates(
+    (data ?? []).map((row) => row.session_date as string),
+    start,
+  )
 }
 
 /**

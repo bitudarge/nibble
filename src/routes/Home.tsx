@@ -4,6 +4,7 @@ import { BookCover } from '../components/book/BookCover'
 import { ProgressControl } from '../components/book/ProgressControl'
 import { Mascot } from '../components/brand/Mascot'
 import { useCelebration } from '../components/celebrate/useCelebration'
+import { ProgressRing } from '../components/dashboard/ProgressRing'
 import { CirclesIcon, RecsIcon } from '../components/layout/navIcons'
 import { useAuth } from '../lib/auth/useAuth'
 import { getRecentCircleActivity, type RecentCircleActivity } from '../lib/circles/data'
@@ -14,10 +15,9 @@ import {
   getGoalForYear,
   getIsoWeekPeriodKey,
   getMonthPeriodKey,
+  getReadDaysThisWeek,
   getStreak,
   isStreakMilestone,
-  setGoalForPeriod,
-  setGoalForYear,
 } from '../lib/goals/data'
 import { resolveDisplayIdentity } from '../lib/profile/identity'
 import { getRecommendations, type Recommendation } from '../lib/recommender'
@@ -29,133 +29,12 @@ type LoadState = 'loading' | 'error' | 'loaded'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const STREAK_DOTS = 7
+const WEEK_DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 // Computed once per module load, not per render — the "current" month/week
 // genuinely only changes at a real calendar boundary, no need to
 // recompute it on every re-render.
 const MONTH_KEY = getMonthPeriodKey(new Date())
 const WEEK_KEY = getIsoWeekPeriodKey(new Date())
-
-/**
- * One goal card: streak-style display when a target's set, an inline
- * "set/edit" form otherwise. Shared by the yearly/monthly/weekly goals so
- * "editable, always, not just on first set" (a real gap in the old
- * yearly-only version, which only ever showed the input before a goal
- * existed) only needs to be right in one place.
- */
-function GoalCard({
-  label,
-  bgClass,
-  textClass,
-  current,
-  goal,
-  onSave,
-}: {
-  label: string
-  bgClass: string
-  textClass: string
-  current: number
-  goal: ReadingGoal | null
-  onSave: (target: number) => Promise<void>
-}) {
-  const [editing, setEditing] = useState(false)
-  const [input, setInput] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleSave() {
-    const target = Number(input)
-    if (!Number.isFinite(target) || target <= 0) {
-      setError('Enter a positive number of books.')
-      return
-    }
-    setSaving(true)
-    setError(null)
-    try {
-      await onSave(Math.round(target))
-      setEditing(false)
-      setInput('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save that goal.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const showForm = editing || !goal
-  const pct = goal ? Math.min(100, Math.round((current / goal.target_books) * 100)) : 0
-
-  return (
-    <div className={`rounded-[22px] ${bgClass} p-4 shadow-soft`}>
-      <div
-        className={`mb-1.5 flex items-center justify-between font-sans text-[11.5px] font-bold tracking-wide ${textClass} uppercase`}
-      >
-        <span>{label}</span>
-        {goal && !editing && (
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(true)
-              setInput(String(goal.target_books))
-            }}
-            className={`normal-case ${textClass} opacity-70 transition-opacity active:opacity-40`}
-          >
-            Edit
-          </button>
-        )}
-      </div>
-
-      {showForm ? (
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g. 4"
-            className="w-16 rounded-full border border-line bg-surface px-3 py-1.5 font-sans text-sm text-ink"
-            aria-label={`${label} target`}
-          />
-          <button
-            type="button"
-            onClick={() => void handleSave()}
-            disabled={!input.trim() || saving}
-            className="rounded-full bg-sage px-3.5 py-1.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95 disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : goal ? 'Update' : 'Set goal'}
-          </button>
-          {editing && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(false)
-                setError(null)
-              }}
-              className={`font-sans text-xs font-bold ${textClass} opacity-70`}
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className={`font-sans text-3xl font-extrabold ${textClass}`}>
-            {current}/{goal.target_books}
-          </div>
-          <div className={`mt-0.5 font-sans text-[12.5px] font-semibold ${textClass} opacity-80`}>
-            books finished
-          </div>
-          <div className="mt-2.5 h-[9px] overflow-hidden rounded-full bg-black/10">
-            <div
-              className="h-full rounded-full bg-sage transition-[width] duration-500 ease-out"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </>
-      )}
-      {error && <p className={`mt-1.5 font-sans text-xs ${textClass}`}>{error}</p>}
-    </div>
-  )
-}
 
 function FlameIcon() {
   return (
@@ -175,21 +54,13 @@ function FlameIcon() {
   )
 }
 
-function OpenBookIcon() {
+function LeafIcon({ className = '' }: { className?: string }) {
   return (
-    <svg
-      width="19"
-      height="19"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.1"
-      strokeLinejoin="round"
-      aria-hidden
-      className="text-sage"
-    >
-      <path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5z" />
-      <path d="M20 5.5A1.5 1.5 0 0018.5 4H13v16h5.5a1.5 1.5 0 001.5-1.5z" />
+    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden className={className}>
+      <path
+        fill="currentColor"
+        d="M20 4C10 4 4 9.5 4 16.5c0 1.4.3 2.6.8 3.5C7 15 11.5 11.5 18 10c-4.5 2.2-8 5.6-9.6 10 1 .3 2 .5 3.1.5 6 0 8.5-6 8.5-16.5z"
+      />
     </svg>
   )
 }
@@ -200,6 +71,11 @@ function greeting(): string {
   if (hour < 12) return 'Morning'
   if (hour < 18) return 'Afternoon'
   return 'Evening'
+}
+
+/** Rough "about N evenings" estimate for the hero card, matching the mockup's own math (45 pages/evening, at least one). */
+function eveningsLeft(pagesLeft: number): number {
+  return Math.max(1, Math.ceil(pagesLeft / 45))
 }
 
 export function Home() {
@@ -215,6 +91,7 @@ export function Home() {
   const [goal, setGoal] = useState<ReadingGoal | null>(null)
   const [monthGoal, setMonthGoal] = useState<ReadingGoal | null>(null)
   const [weekGoal, setWeekGoal] = useState<ReadingGoal | null>(null)
+  const [weekDaysRead, setWeekDaysRead] = useState<boolean[]>(Array(7).fill(false) as boolean[])
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [circleActivity, setCircleActivity] = useState<RecentCircleActivity[]>([])
@@ -242,6 +119,7 @@ export function Home() {
           yearGoal,
           monthGoalRow,
           weekGoalRow,
+          daysRead,
           readingStreak,
           recs,
           activity,
@@ -252,6 +130,7 @@ export function Home() {
           getGoalForYear(user.id, CURRENT_YEAR),
           getGoalForPeriod(user.id, 'month', MONTH_KEY),
           getGoalForPeriod(user.id, 'week', WEEK_KEY),
+          getReadDaysThisWeek(user.id, WEEK_KEY),
           getStreak(user.id),
           getRecommendations(user.id, 5),
           getRecentCircleActivity(user.id),
@@ -265,6 +144,7 @@ export function Home() {
         setGoal(yearGoal)
         setMonthGoal(monthGoalRow)
         setWeekGoal(weekGoalRow)
+        setWeekDaysRead(daysRead)
         setStreak(readingStreak)
         setRecommendations(recs)
         setCircleActivity(activity)
@@ -352,6 +232,8 @@ export function Home() {
       if (isStreakMilestone(streakBefore, after)) {
         celebrate(`${after} days in a row. Keep it warm.`)
       }
+      const daysRead = await getReadDaysThisWeek(user.id, WEEK_KEY)
+      setWeekDaysRead(daysRead)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not record today. Try again.')
     } finally {
@@ -374,10 +256,26 @@ export function Home() {
   const currentStreak = streak?.current_streak ?? 0
   const { displayName } = resolveDisplayIdentity(user, profile)
   const firstName = displayName.split(' ')[0] || 'there'
+  const weekPct = weekGoal
+    ? Math.min(100, Math.round((finishedThisWeek / weekGoal.target_books) * 100))
+    : 0
+  const monthPct = monthGoal
+    ? Math.min(100, Math.round((finishedThisMonth / monthGoal.target_books) * 100))
+    : 0
+  const yearPct = goal ? Math.min(100, Math.round((finishedThisYear / goal.target_books) * 100)) : 0
+  const weekSubline =
+    currentlyReading.length > 0
+      ? `${currentlyReading.length} on the go` +
+        (weekGoal
+          ? weekGoal.target_books - finishedThisWeek > 0
+            ? ` · ${weekGoal.target_books - finishedThisWeek} more this week`
+            : ' · weekly goal met'
+          : '')
+      : 'Nothing on the go right now'
 
   return (
     <div
-      className="mx-auto flex max-w-3xl flex-col gap-8"
+      className="mx-auto flex max-w-3xl flex-col gap-6"
       style={{ animation: 'nib-in 0.26s ease both' }}
     >
       {celebrationNode}
@@ -385,6 +283,7 @@ export function Home() {
         <h1 className="font-display text-2xl font-semibold text-ink">
           {greeting()}, {firstName}.
         </h1>
+        <p className="mt-0.5 font-sans text-sm text-muted">{weekSubline}</p>
         {error && (
           <p className="mt-2 rounded-2xl border border-line bg-surface p-3 font-sans text-sm text-ink shadow-soft">
             {error}
@@ -392,96 +291,205 @@ export function Home() {
         )}
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-[22px] bg-honey-soft p-4 shadow-soft">
-          <div className="mb-1.5 font-sans text-[11.5px] font-bold tracking-wide text-honey-text uppercase">
-            Streak
+      {currentlyReading.length === 0 ? (
+        <div className="overflow-hidden rounded-[30px] bg-surface shadow-soft">
+          <div className="flex justify-center bg-tint px-6 pt-6">
+            <Mascot pose="idea" alt="" className="h-40" />
           </div>
-          <div className="font-sans text-3xl font-extrabold text-honey-text">{currentStreak}</div>
-          <div className="mt-0.5 font-sans text-[12.5px] font-semibold text-honey-text opacity-80">
-            day{currentStreak === 1 ? '' : 's'} in a row
-          </div>
-          {streak && streak.longest_streak > currentStreak && (
-            <div className="mt-1 font-sans text-[11px] text-honey-text opacity-70">
-              Best: {streak.longest_streak} days
-            </div>
-          )}
-          <div className="mt-2.5 flex gap-1">
-            {Array.from({ length: STREAK_DOTS }, (_, i) => {
-              const filled = i < Math.min(STREAK_DOTS, currentStreak)
-              // The very next dot (today's, once recorded) pulses gently
-              // to invite the tap below, so the button and the dots read
-              // as one connected gesture rather than two separate things.
-              const isNext = !filled && i === Math.min(STREAK_DOTS, currentStreak)
-              return (
-                <div
-                  key={i}
-                  className="h-[7px] flex-1 rounded-full"
-                  style={{
-                    background: filled ? 'var(--nibbles-honey)' : 'rgba(138,94,27,.22)',
-                    animation: isNext ? 'nib-in 1.6s ease-in-out infinite alternate' : undefined,
-                  }}
-                />
-              )
-            })}
-          </div>
-          {currentlyReading.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => void recordStreakToday()}
-              disabled={recordingStreak}
-              style={{ animation: streakPop ? 'nib-pop 0.42s ease' : undefined }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-honey px-4 py-3 font-sans text-sm font-extrabold text-surface shadow-soft transition-transform active:scale-95 disabled:opacity-50"
-            >
-              <FlameIcon />
-              {recordingStreak ? 'Recording…' : 'I read today'}
-            </button>
-          ) : (
-            <p className="mt-3 font-sans text-[11px] text-honey-text opacity-70">
-              Start a book to record a streak day.
+          <div className="p-6 text-center">
+            <h2 className="font-display text-xl font-semibold text-ink">Nothing on the go</h2>
+            <p className="mt-1.5 font-sans text-sm text-muted">
+              Pick something short to start. Nibbles likes small books too.
             </p>
-          )}
+            <Link
+              to="/search"
+              className="btn-cta mt-4 inline-block rounded-full bg-sage px-7 py-3 font-sans text-base font-bold text-surface"
+            >
+              Find a book
+            </Link>
+          </div>
         </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {currentlyReading.map((item) => {
+            const pageCount = item.books.page_count
+            const currentPage = item.current_page ?? 0
+            const pct = pageCount ? Math.min(100, Math.round((currentPage / pageCount) * 100)) : 0
+            const pagesLeft = pageCount ? Math.max(0, pageCount - currentPage) : null
+            return (
+              <div key={item.id} className="rounded-[30px] bg-surface p-4.5 shadow-soft">
+                <div className="mb-4 flex gap-4">
+                  <Link to={`/book/${item.book_id}`} className="flex-none">
+                    <BookCover
+                      coverUrl={item.books.cover_url}
+                      title={item.books.title}
+                      className="h-[130px] w-[86px] shadow-lift"
+                    />
+                  </Link>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="mb-1 font-sans text-[11px] font-bold tracking-wide text-sage uppercase">
+                      Still nibbling
+                    </span>
+                    <Link
+                      to={`/book/${item.book_id}`}
+                      className="block truncate font-display text-lg font-semibold text-ink"
+                    >
+                      {item.books.title}
+                    </Link>
+                    <p className="mt-0.5 truncate font-sans text-sm text-muted">
+                      {item.books.author}
+                    </p>
+                    {pagesLeft !== null && (
+                      <p className="mt-auto font-sans text-[13px] font-bold text-sage-deep">
+                        {pagesLeft} pages left · about {eveningsLeft(pagesLeft)} evening
+                        {eveningsLeft(pagesLeft) === 1 ? '' : 's'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {pageCount && (
+                  <div className="mb-4 h-3 overflow-hidden rounded-full bg-tint">
+                    <div
+                      className="h-full rounded-full transition-[width] duration-500 ease-out"
+                      style={{
+                        width: `${pct}%`,
+                        background:
+                          'linear-gradient(90deg, var(--nibbles-sage-deep), var(--nibbles-sage))',
+                      }}
+                    />
+                  </div>
+                )}
+                <ProgressControl
+                  currentPage={currentPage}
+                  pageCount={pageCount}
+                  onSave={(page) => quickLogProgress(item, page)}
+                />
+              </div>
+            )
+          })}
+        </div>
+      )}
 
-        <GoalCard
-          label={`${CURRENT_YEAR} goal`}
-          bgClass="bg-leaf"
-          textClass="text-on-leaf"
-          current={finishedThisYear}
-          goal={goal}
-          onSave={async (target) => {
-            if (!user) return
-            const updated = await setGoalForYear(user.id, CURRENT_YEAR, target)
-            setGoal(updated)
-          }}
-        />
+      <div className="rounded-[22px] bg-honey-soft p-4 shadow-soft">
+        <div className="mb-1.5 font-sans text-[11.5px] font-bold tracking-wide text-honey-text uppercase">
+          Streak
+        </div>
+        <div className="font-sans text-3xl font-extrabold text-honey-text">{currentStreak}</div>
+        <div className="mt-0.5 font-sans text-[12.5px] font-semibold text-honey-text opacity-80">
+          day{currentStreak === 1 ? '' : 's'} in a row
+        </div>
+        {streak && streak.longest_streak > currentStreak && (
+          <div className="mt-1 font-sans text-[11px] text-honey-text opacity-70">
+            Best: {streak.longest_streak} days
+          </div>
+        )}
+        <div className="mt-2.5 flex gap-1">
+          {Array.from({ length: STREAK_DOTS }, (_, i) => {
+            const filled = i < Math.min(STREAK_DOTS, currentStreak)
+            // The very next dot (today's, once recorded) pulses gently
+            // to invite the tap below, so the button and the dots read
+            // as one connected gesture rather than two separate things.
+            const isNext = !filled && i === Math.min(STREAK_DOTS, currentStreak)
+            return (
+              <div
+                key={i}
+                className="h-[7px] flex-1 rounded-full"
+                style={{
+                  background: filled ? 'var(--nibbles-honey)' : 'rgba(138,94,27,.22)',
+                  animation: isNext ? 'nib-in 1.6s ease-in-out infinite alternate' : undefined,
+                }}
+              />
+            )
+          })}
+        </div>
+        {currentlyReading.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => void recordStreakToday()}
+            disabled={recordingStreak}
+            style={{ animation: streakPop ? 'nib-pop 0.42s ease' : undefined }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-honey px-4 py-3 font-sans text-sm font-extrabold text-surface shadow-soft transition-transform active:scale-95 disabled:opacity-50"
+          >
+            <FlameIcon />
+            {recordingStreak ? 'Recording…' : 'I read today'}
+          </button>
+        ) : (
+          <p className="mt-3 font-sans text-[11px] text-honey-text opacity-70">
+            Start a book to record a streak day.
+          </p>
+        )}
+      </div>
 
-        <GoalCard
-          label="This month"
-          bgClass="bg-tint"
-          textClass="text-ink"
-          current={finishedThisMonth}
-          goal={monthGoal}
-          onSave={async (target) => {
-            if (!user) return
-            const updated = await setGoalForPeriod(user.id, 'month', MONTH_KEY, target)
-            setMonthGoal(updated)
-          }}
-        />
-
-        <GoalCard
-          label="This week"
-          bgClass="bg-surface"
-          textClass="text-ink"
-          current={finishedThisWeek}
-          goal={weekGoal}
-          onSave={async (target) => {
-            if (!user) return
-            const updated = await setGoalForPeriod(user.id, 'week', WEEK_KEY, target)
-            setWeekGoal(updated)
-          }}
-        />
-      </section>
+      <Link
+        to="/wrap"
+        className="block rounded-[30px] bg-surface p-4.5 shadow-soft transition-transform active:scale-[.985]"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Your goals</h2>
+          <span className="font-sans text-[12.5px] font-extrabold text-sage-deep">Adjust</span>
+        </div>
+        <div className="mb-4 flex items-center gap-4">
+          <ProgressRing percent={weekPct}>
+            <span className="font-display text-2xl leading-none font-semibold text-ink">
+              {finishedThisWeek}
+            </span>
+            <span className="mt-0.5 font-sans text-[10px] font-bold text-muted">
+              of {weekGoal?.target_books ?? '–'}
+            </span>
+          </ProgressRing>
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 font-sans text-[11px] font-bold tracking-wide text-muted uppercase">
+              Days this week
+            </div>
+            <div className="flex gap-1.5">
+              {WEEK_DAY_LABELS.map((label, i) => (
+                <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                  <div
+                    className="flex h-8 w-full items-center justify-center rounded-[10px]"
+                    style={{
+                      background: weekDaysRead[i] ? 'var(--nibbles-sage)' : 'var(--nibbles-line)',
+                    }}
+                  >
+                    {weekDaysRead[i] && <LeafIcon className="text-surface" />}
+                  </div>
+                  <span className="font-sans text-[9.5px] font-bold text-muted">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mb-3.5 h-px bg-line" />
+        <div className="flex items-center gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <span className="font-sans text-[11px] font-bold tracking-wide text-muted uppercase">
+                This month
+              </span>
+              <span className="font-sans text-[12.5px] font-extrabold text-sage-deep">
+                {finishedThisMonth} of {monthGoal?.target_books ?? '–'}
+              </span>
+            </div>
+            <div className="h-3.5 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-sage transition-[width] duration-500 ease-out"
+                style={{ width: `${monthPct}%` }}
+              />
+            </div>
+          </div>
+          <div className="h-11 w-px flex-none bg-line" />
+          <div className="w-24 flex-none">
+            <div className="mb-1.5 font-sans text-[11px] font-bold tracking-wide text-muted uppercase">
+              This year
+            </div>
+            <div className="font-display text-xl leading-none font-semibold text-ink">
+              {finishedThisYear}/{goal?.target_books ?? '–'}
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-line">
+              <div className="h-full rounded-full bg-sage" style={{ width: `${yearPct}%` }} />
+            </div>
+          </div>
+        </div>
+      </Link>
 
       {streak && streak.rest_days_banked > 0 && (
         <div className="flex items-center gap-3 rounded-[26px] bg-ink p-4">
@@ -496,59 +504,10 @@ export function Home() {
       )}
 
       <section>
-        <div className="mb-3 flex items-center gap-2">
-          <OpenBookIcon />
-          <h2 className="font-sans text-lg font-extrabold text-ink">Currently reading</h2>
-        </div>
-        {currentlyReading.length === 0 ? (
-          <p className="font-sans text-sm text-muted">
-            Nothing in progress.{' '}
-            <Link to="/search" className="font-bold text-sage underline">
-              Find something to read
-            </Link>
-            .
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {currentlyReading.map((item) => (
-              <li
-                key={item.id}
-                className="flex items-center gap-3.5 rounded-[22px] bg-surface p-3.5 shadow-soft"
-              >
-                <Link to={`/book/${item.book_id}`} className="flex-none">
-                  <BookCover
-                    coverUrl={item.books.cover_url}
-                    title={item.books.title}
-                    className="h-[84px] w-14"
-                  />
-                </Link>
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/book/${item.book_id}`}
-                    className="block truncate font-display text-base font-semibold text-ink"
-                  >
-                    {item.books.title}
-                  </Link>
-                  <p className="mt-0.5 mb-2 truncate font-sans text-xs text-muted">
-                    {item.books.author}
-                  </p>
-                  <ProgressControl
-                    currentPage={item.current_page ?? 0}
-                    pageCount={item.books.page_count}
-                    onSave={(page) => quickLogProgress(item, page)}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <RecsIcon />
-            <h2 className="font-sans text-lg font-extrabold text-ink">Recommended next</h2>
+            <h2 className="font-sans text-lg font-extrabold text-ink">Picked for you</h2>
           </div>
           <Link to="/recommendations" className="font-sans text-xs font-bold text-sage">
             See all
