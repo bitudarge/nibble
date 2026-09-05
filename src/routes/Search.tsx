@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { GenreShelves } from '../components/discover/GenreShelves'
 import { useAuth } from '../lib/auth/useAuth'
 import { getOrCreateBook } from '../lib/books/data'
-import { searchOpenLibrary, type OpenLibrarySearchResult } from '../lib/books/openLibrary'
+import {
+  searchOpenLibrary,
+  searchOpenLibraryBySubject,
+  type OpenLibrarySearchResult,
+} from '../lib/books/openLibrary'
+import { genreLabelFor } from '../lib/discover/genreLabel'
 import { getOrComputeTasteProfile } from '../lib/recommender'
+import { genreTagToSubjectSlug } from '../lib/recommender/tagVocabulary'
 import { setShelfStatus } from '../lib/shelf/data'
 
 type LoadState = 'idle' | 'loading' | 'error' | 'loaded'
@@ -14,9 +19,10 @@ type LoadState = 'idle' | 'loading' | 'error' | 'loaded'
 // a request per keystroke.
 const DEBOUNCE_MS = 300
 
-// A few moods to search by instead of a title, matching the "cosy /
-// slow burn / quiet" chips in the design mockup.
-const MOOD_CHIPS = ['cosy', 'slow burn', 'quiet', 'fairy tale']
+// Shown instead of genre chips for anyone who hasn't picked any genres on
+// the taste quiz yet — a single honest "browse something popular" option
+// rather than guessing at moods nobody told us they like.
+const POPULAR_CHIP = 'popular'
 
 function isAbortError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'name' in err && err.name === 'AbortError'
@@ -58,19 +64,29 @@ export function Search() {
   const [addingId, setAddingId] = useState<string | null>(null)
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
   // The bare genre tags ("fantasy", "sci-fi") from the user's taste quiz
-  // answers, in the order they picked them — drives the personalized genre
-  // shelves below the mood chips. Stays an empty array (no shelves render,
-  // see GenreShelves) for anyone who hasn't taken the quiz yet, or if the
-  // profile fails to load for any reason: this is a bonus section on top
-  // of a working search page, not something worth showing a scary error
-  // for.
+  // answers, in the order they picked them — drives the filter chips below
+  // the search box. Stays an empty array for anyone who hasn't taken the
+  // quiz yet, or if the profile fails to load for any reason (falls back
+  // to a single "Popular" chip in that case, see genreChips below): this
+  // is a nice-to-have on top of a working search page, not something
+  // worth showing a scary error for.
   const [quizGenres, setQuizGenres] = useState<string[]>([])
+  // Which genre chip (if any) produced the results currently on screen —
+  // distinct from `query`, which chip clicks also set (to the chip's
+  // display label) so the results header reads naturally. Lets typing in
+  // the search box cleanly fall back to text search, and lets the "Try
+  // again" button retry whichever kind of search actually failed.
+  const [activeGenre, setActiveGenre] = useState<string | null>(null)
 
   // A timer for the debounce, and the controller for whichever request is
   // currently in flight, so a fast-typing user's earlier keystrokes never
   // race a later one to the results.
   const debounceRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // Genre-chip searches have no AbortController (Open Library's subjects
+  // endpoint call takes no signal), so a request id guards against a
+  // slower earlier click's response landing after a faster later one's.
+  const genreRequestIdRef = useRef(0)
 
   function runSearch(trimmed: string) {
     abortRef.current?.abort()
@@ -111,6 +127,37 @@ export function Search() {
 
     if (immediate) runSearch(trimmed)
     else debounceRef.current = window.setTimeout(() => runSearch(trimmed), DEBOUNCE_MS)
+  }
+
+  // Genre chips search real books in that genre (Open Library's
+  // subject-browsing endpoint), not a title/author text match — clicking
+  // "Fantasy" should show fantasy books, not books with "fantasy" in the
+  // title. `genre` is one of the bare quiz tags, or POPULAR_CHIP.
+  function runGenreSearch(genre: string) {
+    abortRef.current?.abort()
+    const requestId = ++genreRequestIdRef.current
+
+    setActiveGenre(genre)
+    setState('loading')
+    setError(null)
+    setSearchParams({}, { replace: true })
+
+    const slug = genreTagToSubjectSlug(genre === POPULAR_CHIP ? 'fiction' : genre)
+    searchOpenLibraryBySubject(slug, 24)
+      .then((docs) => {
+        if (genreRequestIdRef.current !== requestId) return
+        setResults(docs)
+        setState('loaded')
+      })
+      .catch((err: unknown) => {
+        if (genreRequestIdRef.current !== requestId) return
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Open Library search failed. Check your connection and try again.',
+        )
+        setState('error')
+      })
   }
 
   // Run once on mount, for a deep link like /search?q=circe. Not part of
@@ -154,12 +201,13 @@ export function Search() {
   function handleQueryChange(e: ChangeEvent<HTMLInputElement>) {
     const value = e.target.value
     setQuery(value)
+    setActiveGenre(null)
     scheduleSearch(value)
   }
 
-  function handleChipClick(mood: string) {
-    setQuery(mood)
-    scheduleSearch(mood, { immediate: true })
+  function handleChipClick(genre: string) {
+    setQuery(genre === POPULAR_CHIP ? 'Popular' : genreLabelFor(genre))
+    runGenreSearch(genre)
   }
 
   async function handleSelect(result: OpenLibrarySearchResult) {
@@ -194,6 +242,10 @@ export function Search() {
 
   const trimmedQuery = query.trim()
   const showResultsArea = trimmedQuery.length > 0
+  // The user's own onboarding genre picks drive the filter chips; anyone
+  // who hasn't taken the quiz (or answered with no genres) gets a single
+  // "Popular" chip instead of a guessed-at mood list.
+  const genreChips = quizGenres.length > 0 ? quizGenres : [POPULAR_CHIP]
 
   return (
     <div className="mx-auto max-w-3xl" style={{ animation: 'nib-in 0.26s ease both' }}>
@@ -222,30 +274,26 @@ export function Search() {
       </form>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {MOOD_CHIPS.map((mood) => (
+        {genreChips.map((genre) => (
           <button
-            key={mood}
+            key={genre}
             type="button"
-            onClick={() => handleChipClick(mood)}
-            className="rounded-full bg-surface px-3.5 py-2 font-sans text-[13px] font-bold text-ink shadow-soft transition-transform active:scale-95"
+            onClick={() => handleChipClick(genre)}
+            className="rounded-full px-3.5 py-2 font-sans text-[13px] font-bold shadow-soft transition-transform active:scale-95"
+            style={
+              activeGenre === genre
+                ? { background: 'var(--nibbles-sage)', color: 'var(--nibbles-surface)' }
+                : { background: 'var(--nibbles-surface)', color: 'var(--nibbles-ink)' }
+            }
           >
-            {mood}
+            {genre === POPULAR_CHIP ? 'Popular' : genreLabelFor(genre)}
           </button>
         ))}
       </div>
 
-      <GenreShelves
-        genres={quizGenres}
-        openingId={openingId}
-        onSelect={(result) => void handleSelect(result)}
-        addedIds={addedIds}
-        addingId={addingId}
-        onQuickAdd={(result) => void handleQuickAdd(result)}
-      />
-
       {!showResultsArea && (
         <p className="font-sans text-sm text-muted">
-          Search by title, author, or try one of the moods above.
+          Search by title or author, or try one of the genres above.
         </p>
       )}
 
@@ -264,7 +312,7 @@ export function Search() {
           <p className="mb-2 font-sans text-sm">{error}</p>
           <button
             type="button"
-            onClick={() => runSearch(trimmedQuery)}
+            onClick={() => (activeGenre ? runGenreSearch(activeGenre) : runSearch(trimmedQuery))}
             className="font-sans text-sm font-bold text-sage underline transition-opacity active:opacity-60"
           >
             Try again
@@ -357,7 +405,7 @@ export function Search() {
             Nibbles found nothing
           </div>
           <div className="mt-1 font-sans text-[13.5px] text-muted">
-            Try a mood instead: cosy, quiet, slow burn.
+            Try one of the genre chips above instead.
           </div>
         </div>
       )}
