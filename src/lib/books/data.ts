@@ -2,6 +2,7 @@ import { supabase } from '../supabase/client'
 import type { Book } from '../../types/database'
 import { fetchGoogleBooksDetails, type GoogleBooksDetails } from './googleBooks'
 import {
+  fetchOpenLibraryPageCount,
   fetchOpenLibraryWorkDetails,
   type OpenLibrarySearchResult,
   type OpenLibraryWorkDetails,
@@ -86,22 +87,59 @@ export function hasUsefulEnrichment(book: Book): boolean {
 }
 
 /**
- * Runs once per book, with the one exception above: the `enriched` flag
- * in metadata marks that we've already asked both sources. If the update
- * fails for any reason, the caller just gets the book back unchanged
- * rather than an error, since a page that already renders fine with
- * Open Library's own search-result data shouldn't break over this.
+ * Runs once per book, with two exceptions: a stale-empty prior attempt
+ * (see hasUsefulEnrichment above) retries the description/categories
+ * half, and a still-missing page count gets its own top-up try via Open
+ * Library's editions (see fetchOpenLibraryPageCount) independently of
+ * whether the rest of the enrichment is already good — a book can have a
+ * real synopsis and genre categories yet still have no page count, and
+ * shouldn't have to wait on a full re-enrichment to get one. If the
+ * update fails for any reason, the caller just gets the book back
+ * unchanged rather than an error, since a page that already renders fine
+ * shouldn't break over this.
  */
 export async function enrichBook(book: Book): Promise<Book> {
-  if (book.metadata.enriched && hasUsefulEnrichment(book)) return book
+  const needsContent = !book.metadata.enriched || !hasUsefulEnrichment(book)
+  const needsPageCount = !book.page_count
+
+  if (!needsContent && !needsPageCount) return book
   const db = requireSupabase()
 
-  const google = await fetchGoogleBooksDetails(book.title, book.author)
-  const fallback =
-    !google?.description || !google.categories.length
-      ? await fetchOpenLibraryWorkDetails(book.open_library_id)
-      : null
-  const details = mergeEnrichmentSources(google, fallback)
+  // Seed `details` from the book's own existing metadata when skipping
+  // the content half, so buildEnrichmentUpdate's merge doesn't wipe out
+  // an already-good description/categories just because this run only
+  // needed to top up the page count.
+  let details: GoogleBooksDetails | null = needsContent
+    ? null
+    : {
+        description:
+          typeof book.metadata.description === 'string' ? book.metadata.description : null,
+        categories: Array.isArray(book.metadata.categories)
+          ? (book.metadata.categories as string[])
+          : [],
+        pageCount: book.page_count,
+        publishedYear: book.published_year,
+        coverUrl: book.cover_url,
+      }
+
+  if (needsContent) {
+    const google = await fetchGoogleBooksDetails(book.title, book.author)
+    const fallback =
+      !google?.description || !google.categories.length
+        ? await fetchOpenLibraryWorkDetails(book.open_library_id)
+        : null
+    details = mergeEnrichmentSources(google, fallback)
+  }
+
+  if (needsPageCount && !details?.pageCount) {
+    const pageCount = await fetchOpenLibraryPageCount(book.open_library_id)
+    if (pageCount) {
+      details = details
+        ? { ...details, pageCount }
+        : { description: null, categories: [], pageCount, publishedYear: null, coverUrl: null }
+    }
+  }
+
   const update = buildEnrichmentUpdate(book, details)
 
   const { data: updated, error } = await db
