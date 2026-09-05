@@ -13,13 +13,19 @@ function result(id: string, title = `Book ${id}`) {
   return { openLibraryId: id, title, author: 'Some Author', publishedYear: null, coverUrl: null }
 }
 
+// The quick-add ("Save") props are exercised in their own tests below;
+// everything else just needs harmless defaults.
+const quickAddDefaults = { addedIds: new Set<string>(), addingId: null, onQuickAdd: () => {} }
+
 afterEach(() => {
   mockedSearch.mockReset()
 })
 
 describe('GenreShelves', () => {
   it('renders nothing when there are no genres', () => {
-    const { container } = render(<GenreShelves genres={[]} openingId={null} onSelect={() => {}} />)
+    const { container } = render(
+      <GenreShelves genres={[]} openingId={null} onSelect={() => {}} {...quickAddDefaults} />,
+    )
     expect(container).toBeEmptyDOMElement()
     expect(mockedSearch).not.toHaveBeenCalled()
   })
@@ -27,7 +33,14 @@ describe('GenreShelves', () => {
   it('fetches and shows one shelf per genre, using the genre label as the heading', async () => {
     mockedSearch.mockResolvedValue([result('ol1')])
 
-    render(<GenreShelves genres={['fantasy', 'sci-fi']} openingId={null} onSelect={() => {}} />)
+    render(
+      <GenreShelves
+        genres={['fantasy', 'sci-fi']}
+        openingId={null}
+        onSelect={() => {}}
+        {...quickAddDefaults}
+      />,
+    )
 
     expect(await screen.findByText('Fantasy')).toBeInTheDocument()
     expect(await screen.findByText('Sci-Fi')).toBeInTheDocument()
@@ -41,7 +54,9 @@ describe('GenreShelves', () => {
     mockedSearch.mockResolvedValue([])
     const genres = ['fantasy', 'fantasy', 'romance', 'mystery', 'thriller', 'horror', 'poetry']
 
-    render(<GenreShelves genres={genres} openingId={null} onSelect={() => {}} />)
+    render(
+      <GenreShelves genres={genres} openingId={null} onSelect={() => {}} {...quickAddDefaults} />,
+    )
 
     // 5-shelf cap, fantasy deduped to one call, so 5 unique genres called once each.
     await waitFor(() => expect(mockedSearch).toHaveBeenCalledTimes(5))
@@ -53,7 +68,14 @@ describe('GenreShelves', () => {
       return [result('ol1')]
     })
 
-    render(<GenreShelves genres={['fantasy', 'romance']} openingId={null} onSelect={() => {}} />)
+    render(
+      <GenreShelves
+        genres={['fantasy', 'romance']}
+        openingId={null}
+        onSelect={() => {}}
+        {...quickAddDefaults}
+      />,
+    )
 
     expect(await screen.findByText('network down')).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /Book ol1/ })).toBeInTheDocument()
@@ -63,7 +85,14 @@ describe('GenreShelves', () => {
     mockedSearch.mockResolvedValue([result('ol1')])
     const onSelect = vi.fn()
 
-    render(<GenreShelves genres={['fantasy']} openingId={null} onSelect={onSelect} />)
+    render(
+      <GenreShelves
+        genres={['fantasy']}
+        openingId={null}
+        onSelect={onSelect}
+        {...quickAddDefaults}
+      />,
+    )
 
     const button = await screen.findByRole('button', { name: /Book ol1/ })
     fireEvent.click(button)
@@ -73,10 +102,49 @@ describe('GenreShelves', () => {
   it('disables every book button while one is opening, and labels the matching one', async () => {
     mockedSearch.mockResolvedValue([result('ol1'), result('ol2')])
 
-    render(<GenreShelves genres={['fantasy']} openingId="ol2" onSelect={() => {}} />)
+    render(
+      <GenreShelves
+        genres={['fantasy']}
+        openingId="ol2"
+        onSelect={() => {}}
+        {...quickAddDefaults}
+      />,
+    )
 
     const button = await screen.findByRole('button', { name: /Book ol1/ })
     expect(button).toBeDisabled()
     await waitFor(() => expect(screen.getByText('Opening…')).toBeInTheDocument())
+  })
+
+  it('calls onQuickAdd when Save is tapped, and shows the added state', async () => {
+    mockedSearch.mockResolvedValue([result('ol1')])
+    const onQuickAdd = vi.fn()
+
+    const { rerender } = render(
+      <GenreShelves
+        genres={['fantasy']}
+        openingId={null}
+        onSelect={() => {}}
+        addedIds={new Set()}
+        addingId={null}
+        onQuickAdd={onQuickAdd}
+      />,
+    )
+
+    const saveButton = await screen.findByRole('button', { name: 'Save' })
+    fireEvent.click(saveButton)
+    expect(onQuickAdd).toHaveBeenCalledWith(result('ol1'))
+
+    rerender(
+      <GenreShelves
+        genres={['fantasy']}
+        openingId={null}
+        onSelect={() => {}}
+        addedIds={new Set(['ol1'])}
+        addingId={null}
+        onQuickAdd={onQuickAdd}
+      />,
+    )
+    expect(await screen.findByRole('button', { name: 'On your list ✓' })).toBeDisabled()
   })
 })
