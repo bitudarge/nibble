@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { getMyCircles } from '../lib/circles/data'
 import { getStreak } from '../lib/goals/data'
 import { useAuth } from '../lib/auth/useAuth'
@@ -24,7 +24,8 @@ function formatTag(tag: string): string {
 }
 
 export function Wrap() {
-  const { user, profile } = useAuth()
+  const navigate = useNavigate()
+  const { user, profile, signOut } = useAuth()
   const [year, setYear] = useState(CURRENT_YEAR)
   const [wrap, setWrap] = useState<WrapData | null>(null)
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
@@ -66,25 +67,43 @@ export function Wrap() {
 
   const { displayName, avatarUrl } = resolveDisplayIdentity(user, profile)
 
+  async function handleSignOut() {
+    await signOut()
+    navigate('/login')
+  }
+
   return (
     <div className="mx-auto max-w-2xl" style={{ animation: 'nib-in 0.26s ease both' }}>
-      <div className="mb-5 flex items-center gap-3.5">
-        {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="h-14 w-14 rounded-full" />
-        ) : (
-          <div
-            aria-hidden
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-leaf font-sans text-2xl font-extrabold text-on-leaf"
-          >
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div>
-          <div className="font-display text-xl font-semibold text-ink">{displayName}</div>
-          <div className="font-sans text-sm text-muted">
-            {circleCount} circle{circleCount === 1 ? '' : 's'}
+      <div className="mb-5 flex items-center justify-between gap-3.5">
+        <div className="flex items-center gap-3.5">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+          ) : (
+            <div
+              aria-hidden
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-leaf font-sans text-2xl font-extrabold text-on-leaf"
+            >
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <div className="font-display text-xl font-semibold text-ink">{displayName}</div>
+            <div className="font-sans text-sm text-muted">
+              {circleCount} circle{circleCount === 1 ? '' : 's'}
+            </div>
           </div>
         </div>
+        {/* A real, reachable sign-out on the profile page itself — before
+            this, signing out only existed in the desktop-only hamburger
+            menu, so there was no way to sign out at all on a phone, this
+            app's primary surface. */}
+        <button
+          type="button"
+          onClick={() => void handleSignOut()}
+          className="flex-none rounded-full bg-tint px-3.5 py-2 font-sans text-xs font-bold text-muted transition-colors active:text-ink"
+        >
+          Sign out
+        </button>
       </div>
 
       <div className="mb-5 flex items-center justify-between gap-3">
