@@ -94,7 +94,7 @@ export function AppShell() {
           >
             <HamburgerIcon />
           </button>
-          <Logo variant="mark" className="h-9 md:hidden" />
+          <Logo variant="full" className="h-8 md:hidden" />
           <Logo variant="full" className="hidden h-8 md:block" />
         </div>
 
@@ -174,16 +174,19 @@ export function AppShell() {
         )}
       </header>
 
-      <main className="flex-1 px-4 pt-4 pb-28 md:px-8 md:pt-6 md:pb-10">
+      <main className="flex-1 px-4 pt-4 pb-32 md:px-8 md:pt-6 md:pb-10">
         <div className="mx-auto w-full max-w-5xl">
           <Outlet />
         </div>
       </main>
 
-      {/* Phone bottom tab bar (hidden from md upward, where the hamburger menu is used instead) */}
+      {/* Phone bottom tab bar: a floating rounded pill with margin on every
+          side (hidden from md upward, where the hamburger menu is used
+          instead), matching the round 4 mockup's own floating bar rather
+          than a full-width strip flush against the screen edges. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface px-2 pt-1.5 md:hidden"
-        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 6px)' }}
+        className="fixed inset-x-3 bottom-3 z-20 rounded-[28px] bg-surface px-2 pt-2 shadow-lift md:hidden"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 8px)' }}
         aria-label="Main"
       >
         <div className="mx-auto flex max-w-md items-stretch justify-between gap-1">
