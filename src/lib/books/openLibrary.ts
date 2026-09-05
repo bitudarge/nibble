@@ -1,3 +1,5 @@
+import { cleanDescription } from './textCleanup'
+
 /**
  * Thin wrapper around Open Library's search API — no API key needed. Kept
  * separate from src/lib/books/data.ts (which talks to our own `books`
@@ -136,8 +138,8 @@ interface OpenLibraryWorkResponse {
 }
 
 function normalizeDescription(description: OpenLibraryDescription): string | null {
-  if (typeof description === 'string') return description
-  if (description && typeof description === 'object') return description.value ?? null
+  if (typeof description === 'string') return cleanDescription(description)
+  if (description && typeof description === 'object') return cleanDescription(description.value)
   return null
 }
 
