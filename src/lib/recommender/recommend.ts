@@ -6,7 +6,7 @@ import { getCircleSignals } from './circleSignals'
 import { discoverBooksForGenres } from './discovery'
 import { explainScore, scoreBook } from './scoring'
 import { MIN_RATINGS_FOR_PERSONALIZATION, getOrComputeTasteProfile } from './tasteProfile'
-import type { TasteProfileData } from './types'
+import type { CircleSignal, TasteProfileData } from './types'
 
 // How many recently-added books to consider scoring. A known MVP limit: as
 // the catalog grows past this, older books stop being candidates at all.
@@ -26,6 +26,28 @@ export interface Recommendation {
    * judge it by rather than just a title and an apology.
    */
   isFallback?: boolean
+  /**
+   * Circle-mates' ratings of this book, the same signals already blended
+   * into `score` (see scoreBook in scoring.ts) — exposed here, not just
+   * internally, so the UI (Recommendations.tsx's "From circles" tab) can
+   * offer a filtered view of "recommendations with real circle signal"
+   * without recomputing or duplicating any scoring logic. Always empty
+   * for the true-cold-start fallback (isFallback: true): those are
+   * recently-added books that never went through real scoring at all, so
+   * there is no real signal to show even if a circle-mate happens to have
+   * rated one.
+   */
+  circleSignals: CircleSignal[]
+}
+
+/**
+ * True when at least one circle-mate has a real signal (rated it) on this
+ * recommendation. What the Recommendations page's "From circles" tab
+ * filters on — pure and exported so the UI never has to guess at, or
+ * duplicate, what counts as "real" circle signal.
+ */
+export function hasCircleSignal(rec: Pick<Recommendation, 'circleSignals'>): boolean {
+  return rec.circleSignals.length > 0
 }
 
 /**
@@ -78,6 +100,9 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
         `Rate ${remaining} more book${remaining === 1 ? '' : 's'} to personalize this, or take the taste quiz for a head start. Showing recently added books for now.`,
       ],
       isFallback: true,
+      // No real scoring ran for these, so there's no real circle signal to
+      // report either, even if a circle-mate happens to have rated one.
+      circleSignals: [],
     }))
   }
 
@@ -113,7 +138,7 @@ export async function getRecommendations(userId: string, limit = 10): Promise<Re
     const tagProfile = tagProfiles.get(book.id) ?? { bookId: book.id, tagCounts: {} }
     const signals = circleSignals.get(book.id) ?? []
     const result = scoreBook(tasteProfile, tagProfile, signals)
-    return { book, score: result.score, why: explainScore(result) }
+    return { book, score: result.score, why: explainScore(result), circleSignals: signals }
   })
 
   return scored.sort((a, b) => b.score - a.score).slice(0, limit)

@@ -2,11 +2,21 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookCover } from '../components/book/BookCover'
 import { useAuth } from '../lib/auth/useAuth'
-import { getRecommendations, type Recommendation } from '../lib/recommender'
+import { getRecommendations, hasCircleSignal, type Recommendation } from '../lib/recommender'
 import { setShelfStatus } from '../lib/shelf/data'
 import type { Book } from '../types/database'
 
 type LoadState = 'loading' | 'error' | 'loaded'
+
+type Tab = 'recs' | 'circles'
+
+// Same 2-segment pill visual language as Shelves.tsx's "Want to read /
+// Reading / Finished" switch (bg-tint track, bg-sage active pill), just
+// two segments instead of three.
+const TABS: { tab: Tab; label: string }[] = [
+  { tab: 'recs', label: 'Recs' },
+  { tab: 'circles', label: 'From circles' },
+]
 
 const FALLBACK_CATEGORIES_SHOWN = 3
 
@@ -55,6 +65,7 @@ export function Recommendations() {
   const [state, setState] = useState<LoadState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [addedBookIds, setAddedBookIds] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState<Tab>('recs')
 
   useEffect(() => {
     let cancelled = false
@@ -104,6 +115,14 @@ export function Recommendations() {
     )
   }
 
+  // "From circles" filters the exact same scored pool down to books with
+  // at least one real circle-mate signal (rated it) — see hasCircleSignal
+  // in src/lib/recommender/recommend.ts. It never has its own separate
+  // fetch or scoring pass, just a client-side filter of what's already
+  // loaded, so there's one source of truth for what gets recommended.
+  const circleRecommendations = recommendations.filter(hasCircleSignal)
+  const visibleRecommendations = activeTab === 'recs' ? recommendations : circleRecommendations
+
   return (
     <div className="mx-auto max-w-2xl" style={{ animation: 'nib-in 0.26s ease both' }}>
       <h1 className="mb-1 font-display text-2xl font-semibold text-ink">Recommended for you</h1>
@@ -117,17 +136,53 @@ export function Recommendations() {
         </p>
       )}
 
-      {recommendations.length === 0 ? (
-        <p className="font-sans text-sm text-muted">
-          Nothing to recommend yet.{' '}
-          <Link to="/search" className="font-bold text-sage underline">
-            Search for a book
-          </Link>{' '}
-          and rate a few to get started.
-        </p>
+      <div className="mb-5 flex gap-1.5 rounded-full bg-tint p-1.5">
+        {TABS.map(({ tab, label }) => {
+          const active = tab === activeTab
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`h-10 flex-1 rounded-full font-sans text-[12.5px] font-extrabold transition-all active:scale-95 ${
+                active ? 'bg-sage text-surface shadow-soft' : 'text-muted'
+              }`}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {visibleRecommendations.length === 0 ? (
+        activeTab === 'recs' ? (
+          <p className="font-sans text-sm text-muted">
+            Nothing to recommend yet.{' '}
+            <Link to="/search" className="font-bold text-sage underline">
+              Search for a book
+            </Link>{' '}
+            and rate a few to get started.
+          </p>
+        ) : (
+          <div className="rounded-3xl bg-tint px-5 py-8 text-center">
+            <div className="font-display text-lg font-semibold text-ink">
+              Nothing from your circles yet
+            </div>
+            <p className="mt-1 font-sans text-[13.5px] text-muted">
+              Once a circle-mate rates or reviews a book, picks with their stamp of approval will
+              show up here.
+            </p>
+            <Link
+              to="/circles"
+              className="mt-4 inline-block rounded-full bg-sage px-5 py-2.5 font-sans text-sm font-bold text-surface transition-transform active:scale-95"
+            >
+              Join or start a circle
+            </Link>
+          </div>
+        )
       ) : (
         <ul className="flex flex-col gap-3.5">
-          {recommendations.map((rec) => {
+          {visibleRecommendations.map((rec) => {
             const added = addedBookIds.has(rec.book.id)
             return (
               <li key={rec.book.id} className="rounded-[22px] bg-surface p-3.5 shadow-soft">

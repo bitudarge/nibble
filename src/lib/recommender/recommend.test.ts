@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { needsFallback, topGenreAffinities } from './recommend'
-import type { TasteProfileData } from './types'
+import { hasCircleSignal, needsFallback, topGenreAffinities } from './recommend'
+import type { CircleSignal, TasteProfileData } from './types'
 
 function profile(overrides: Partial<TasteProfileData> = {}): TasteProfileData {
   return { tagAffinity: {}, avgRating: 0, ratedBookCount: 0, ...overrides }
@@ -56,5 +56,25 @@ describe('topGenreAffinities', () => {
   it('returns nothing for an empty or all-negative profile', () => {
     expect(topGenreAffinities({})).toEqual([])
     expect(topGenreAffinities({ 'genre:horror': -0.5 })).toEqual([])
+  })
+})
+
+describe('hasCircleSignal', () => {
+  const aSignal: CircleSignal = { memberName: 'Sam', stars: 4, overlap: 0.5 }
+
+  it('is false when no circle-mate has rated the book', () => {
+    expect(hasCircleSignal({ circleSignals: [] })).toBe(false)
+  })
+
+  it('is true when at least one circle-mate has a signal', () => {
+    expect(hasCircleSignal({ circleSignals: [aSignal] })).toBe(true)
+  })
+
+  it('is true for multiple circle signals, not just exactly one', () => {
+    expect(
+      hasCircleSignal({
+        circleSignals: [aSignal, { memberName: 'Alex', stars: 2, overlap: 0 }],
+      }),
+    ).toBe(true)
   })
 })
