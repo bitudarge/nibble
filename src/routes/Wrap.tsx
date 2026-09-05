@@ -35,6 +35,20 @@ function formatTag(tag: string): string {
   return name ? `${TAG_TYPE_LABELS[type ?? ''] ?? type}: ${name}` : tag
 }
 
+function PencilIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 20l1-4.5L15.5 5 19 8.5 8.5 19 4 20z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 /**
  * One editable goal target as a live-updating slider — matches the round
  * 4 mockup's "Goals" card on the You page exactly: label + current
@@ -105,8 +119,9 @@ function GoalSlider({
 export function Wrap() {
   const navigate = useNavigate()
   const { user, profile, signOut } = useAuth()
-  const [year, setYear] = useState(CURRENT_YEAR)
+  const year = CURRENT_YEAR
   const [wrap, setWrap] = useState<WrapData | null>(null)
+  const [editingGoals, setEditingGoals] = useState(false)
   const [streak, setStreak] = useState<ReadingStreak | null>(null)
   const [circleCount, setCircleCount] = useState(0)
 
@@ -206,6 +221,33 @@ export function Wrap() {
         </button>
       </div>
 
+      {/* The account-management links used to sit buried below the goals
+          card and the (now-removed) wrap-year picker, easy to miss. They're
+          real settings someone reaches for often (checking their own
+          ratings, fixing a typo'd name, retaking the quiz after their taste
+          shifts), so they get a proper, visible row right under the
+          identity header instead. */}
+      <div className="mb-5 flex flex-wrap gap-2">
+        <Link
+          to="/my-books"
+          className="rounded-full bg-surface px-3.5 py-2 font-sans text-xs font-bold text-ink shadow-soft"
+        >
+          My ratings and notes
+        </Link>
+        <Link
+          to="/profile/edit"
+          className="rounded-full bg-surface px-3.5 py-2 font-sans text-xs font-bold text-ink shadow-soft"
+        >
+          Edit profile
+        </Link>
+        <Link
+          to="/quiz"
+          className="rounded-full bg-surface px-3.5 py-2 font-sans text-xs font-bold text-ink shadow-soft"
+        >
+          Retake the taste quiz
+        </Link>
+      </div>
+
       {wrap && (
         <div className="mb-5 rounded-[26px] bg-ink p-5">
           <h2 className="mb-3 font-sans text-[11px] font-bold tracking-wide text-page uppercase opacity-70">
@@ -237,85 +279,86 @@ export function Wrap() {
       )}
 
       <section className="mb-5 rounded-[26px] bg-surface p-4.5 shadow-soft">
-        <h2 className="mb-3 font-display text-lg font-semibold text-ink">Goals</h2>
-        <div className="flex flex-col gap-2.5">
-          <GoalSlider
-            label="Weekly"
-            caption="days a week"
-            current={finishedThisWeek}
-            target={weekGoal?.target_books ?? 3}
-            min={1}
-            max={7}
-            onChange={async (value) => {
-              if (!user) return
-              setWeekGoal(await setGoalForPeriod(user.id, 'week', WEEK_KEY, value))
-            }}
-          />
-          <GoalSlider
-            label="Monthly"
-            caption="books a month"
-            current={finishedThisMonth}
-            target={monthGoal?.target_books ?? 2}
-            min={1}
-            max={8}
-            onChange={async (value) => {
-              if (!user) return
-              setMonthGoal(await setGoalForPeriod(user.id, 'month', MONTH_KEY, value))
-            }}
-          />
-          <GoalSlider
-            label="Yearly"
-            caption="books a year"
-            current={finishedThisYear}
-            target={yearGoal?.target_books ?? 12}
-            min={6}
-            max={60}
-            onChange={async (value) => {
-              if (!user) return
-              setYearGoal(await setGoalForYear(user.id, CURRENT_YEAR, value))
-            }}
-          />
-        </div>
-      </section>
-
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <label className="flex items-center gap-2 font-sans text-sm text-ink">
-          Wrap year
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="rounded-full border-2 border-line bg-surface px-3 py-1.5 font-sans text-sm text-ink"
-            aria-label="Year"
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Goals</h2>
+          <button
+            type="button"
+            onClick={() => setEditingGoals((v) => !v)}
+            aria-label={editingGoals ? 'Done editing goals' : 'Edit goals'}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-tint text-sage-deep transition-transform active:scale-90"
           >
-            {Array.from({ length: 5 }, (_, i) => CURRENT_YEAR - i).map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Link
-          to="/quiz"
-          className="rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
-        >
-          Retake the taste quiz
-        </Link>
-      </div>
-
-      <div className="mb-5 flex flex-wrap gap-2">
-        <Link
-          to="/my-books"
-          className="block w-fit rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
-        >
-          My ratings and notes
-        </Link>
-        <Link
-          to="/profile/edit"
-          className="block w-fit rounded-full bg-tint px-3.5 py-1.5 font-sans text-xs font-bold text-ink"
-        >
-          Edit profile
-        </Link>
-      </div>
+            {editingGoals ? (
+              <span className="font-sans text-xs font-extrabold">Done</span>
+            ) : (
+              <PencilIcon />
+            )}
+          </button>
+        </div>
+        {editingGoals ? (
+          <div className="mt-3 flex flex-col gap-2.5">
+            <GoalSlider
+              label="Weekly"
+              caption="days a week"
+              current={finishedThisWeek}
+              target={weekGoal?.target_books ?? 3}
+              min={1}
+              max={7}
+              onChange={async (value) => {
+                if (!user) return
+                setWeekGoal(await setGoalForPeriod(user.id, 'week', WEEK_KEY, value))
+              }}
+            />
+            <GoalSlider
+              label="Monthly"
+              caption="books a month"
+              current={finishedThisMonth}
+              target={monthGoal?.target_books ?? 2}
+              min={1}
+              max={8}
+              onChange={async (value) => {
+                if (!user) return
+                setMonthGoal(await setGoalForPeriod(user.id, 'month', MONTH_KEY, value))
+              }}
+            />
+            <GoalSlider
+              label="Yearly"
+              caption="books a year"
+              current={finishedThisYear}
+              target={yearGoal?.target_books ?? 12}
+              min={6}
+              max={60}
+              onChange={async (value) => {
+                if (!user) return
+                setYearGoal(await setGoalForYear(user.id, CURRENT_YEAR, value))
+              }}
+            />
+          </div>
+        ) : (
+          // Compact read-only summary, matching the same three targets
+          // without the sliders' vertical space, tapping the pencil above
+          // reveals the editable form instead of it always sitting open.
+          <div className="mt-3 flex flex-col gap-1.5 font-sans text-sm text-ink">
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Weekly</span>
+              <span className="font-bold">
+                {finishedThisWeek} of {weekGoal?.target_books ?? 3} days
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Monthly</span>
+              <span className="font-bold">
+                {finishedThisMonth} of {monthGoal?.target_books ?? 2} books
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Yearly</span>
+              <span className="font-bold">
+                {finishedThisYear} of {yearGoal?.target_books ?? 12} books
+              </span>
+            </div>
+          </div>
+        )}
+      </section>
 
       {state === 'loading' && <p className="font-sans text-muted">Building your wrap…</p>}
 
@@ -342,15 +385,34 @@ export function Wrap() {
                   <h2 className="mb-2.5 font-sans text-base font-extrabold text-ink">
                     Your top tags
                   </h2>
-                  <div className="flex flex-wrap gap-2">
-                    {wrap.topTags.map(({ tag, count }) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-tint px-3.5 py-2 font-sans text-sm font-bold text-ink"
-                      >
-                        {formatTag(tag)} ({count})
-                      </span>
-                    ))}
+                  <div className="flex flex-col gap-2.5 rounded-[22px] bg-surface p-4 shadow-soft">
+                    {wrap.topTags.slice(0, 4).map(({ tag, count }, i) => {
+                      const max = wrap.topTags[0]?.count ?? count
+                      const widthPct = Math.max(8, Math.round((count / max) * 100))
+                      return (
+                        <div key={tag} className="flex items-center gap-3">
+                          <span className="w-24 flex-none truncate font-sans text-xs font-bold text-ink">
+                            {formatTag(tag)}
+                          </span>
+                          <div className="h-3 flex-1 overflow-hidden rounded-full bg-tint">
+                            <div
+                              className="h-full rounded-full bg-sage transition-[width] duration-500 ease-out"
+                              style={{
+                                width: `${widthPct}%`,
+                                // A slightly deeper shade for the top bar
+                                // reads as "your strongest pull," matching
+                                // the mockup's flat-green bars closely
+                                // enough without a whole new palette.
+                                opacity: i === 0 ? 1 : 0.85,
+                              }}
+                            />
+                          </div>
+                          <span className="w-5 flex-none text-right font-sans text-xs font-bold text-muted">
+                            {count}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </section>
               )}
